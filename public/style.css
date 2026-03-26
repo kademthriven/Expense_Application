@@ -1,0 +1,200 @@
+* {
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.login-page {
+  background: linear-gradient(135deg, #e3f2fd, #f8f9fa);
+  min-height: 100vh;
+}
+
+.dashboard-page {
+  background: #f5f7fb;
+  min-height: 100vh;
+}
+
+.card {
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card:hover {
+  transform: translateY(-3px);
+}
+
+.stat-card {
+  animation: fadeUp 0.6s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  transition: 0.25s ease;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-card h6 {
+  margin-bottom: 10px;
+  color: #555;
+  font-weight: 600;
+}
+
+.stat-card h3 {
+  margin: 0;
+  font-weight: 700;
+}
+
+.income-card {
+  background: #e8f5e9;
+}
+
+.expense-card {
+  background: #ffebee;
+}
+
+.balance-card {
+  background: #e3f2fd;
+}
+
+.table th,
+.table td {
+  vertical-align: middle;
+}
+
+.table th {
+  font-weight: 600;
+  color: #444;
+}
+
+button {
+  border-radius: 10px !important;
+}
+
+.form-control,
+.form-select {
+  border-radius: 10px;
+  min-height: 44px;
+}
+
+.navbar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+  padding: 10px;
+}
+
+#expenseChart {
+  max-height: 300px;
+}
+
+.badge {
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+#pageInfo {
+  font-weight: 600;
+  color: #555;
+}
+
+#authMessage {
+  min-height: 20px;
+}
+
+.modal-content {
+  border-radius: 18px;
+}
+
+.modal-header,
+.modal-footer {
+  border: none;
+}
+
+.dark-mode {
+  background: #121212 !important;
+  color: #f5f5f5;
+}
+
+.dark-mode .card {
+  background: #1e1e1e;
+  color: #f5f5f5;
+}
+
+.dark-mode .table {
+  color: #f5f5f5;
+}
+
+.dark-mode .table th {
+  color: #ddd;
+}
+
+.dark-mode .form-control,
+.dark-mode .form-select {
+  background: #2a2a2a;
+  color: #fff;
+  border-color: #444;
+}
+
+.dark-mode .navbar {
+  background: #000 !important;
+}
+
+.dark-mode .income-card {
+  background: #1f3b2f;
+}
+
+.dark-mode .expense-card {
+  background: #402020;
+}
+
+.dark-mode .balance-card {
+  background: #1d3247;
+}
+
+.dark-mode .modal-content {
+  background: #1e1e1e;
+  color: #fff;
+}
+
+.dark-mode .btn-close {
+  filter: invert(1);
+}
+
+@media (max-width: 768px) {
+  .chart-container {
+    max-width: 100%;
+  }
+
+  #expenseChart {
+    max-height: 250px;
+  }
+
+  .stat-card h3 {
+    font-size: 1.4rem;
+  }
+
+  .table {
+    font-size: 0.9rem;
+  }
+}
