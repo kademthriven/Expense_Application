@@ -73,10 +73,42 @@ function updateFilterInputs() {
   }
 }
 
+async function refreshPremiumUI() {
+  try {
+    const res = await axios.get('/premium/status', authConfig);
+    const isPremium = !!res.data.isPremium;
+
+    localStorage.setItem('isPremium', String(isPremium));
+
+    document.getElementById('premiumBadge').classList.toggle('d-none', !isPremium);
+    document.getElementById('buyPremiumBtn').classList.toggle('d-none', isPremium);
+  } catch (err) {
+    console.log(err);
+  }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
     document.body.classList.add('dark-mode');
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const paymentStatus = params.get('payment');
+
+  if (paymentStatus === 'success') {
+    alert('Transaction successful');
+    window.history.replaceState({}, document.title, '/index.html');
+  }
+
+  if (paymentStatus === 'failed') {
+    alert('TRANSACTION FAILED');
+    window.history.replaceState({}, document.title, '/index.html');
+  }
+
+  if (paymentStatus === 'pending') {
+    alert('Payment is still pending');
+    window.history.replaceState({}, document.title, '/index.html');
   }
 
   editModalInstance = new bootstrap.Modal(document.getElementById('editTransactionModal'));
@@ -101,6 +133,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadEditAccounts();
   await loadSummary();
   await loadTransactions();
+  await refreshPremiumUI();
 });
 
 document.getElementById('transactionForm').addEventListener('submit', async (e) => {
@@ -158,8 +191,51 @@ document.getElementById('editTransactionForm').addEventListener('submit', async 
   }
 });
 
+async function buyPremiumMembership() {
+  try {
+    const response = await axios.post('/premium/create-order', {}, authConfig);
+
+    const cashfree = Cashfree({
+      mode: response.data.environment === 'production' ? 'production' : 'sandbox'
+    });
+
+    const checkoutOptions = {
+      paymentSessionId: response.data.paymentSessionId,
+      redirectTarget: '_modal'
+    };
+
+    cashfree.checkout(checkoutOptions).then(async (result) => {
+      if (result.error) {
+        console.log(result.error);
+        await refreshPremiumUI();
+        alert('TRANSACTION FAILED');
+      }
+
+      if (result.redirect) {
+        console.log('Payment will be redirected');
+      }
+
+      if (result.paymentDetails) {
+        console.log(result.paymentDetails.paymentMessage);
+
+        await refreshPremiumUI();
+
+        const premiumRes = await axios.get('/premium/status', authConfig);
+
+        if (premiumRes.data.isPremium) {
+          alert('Transaction successful');
+        } else {
+          alert('TRANSACTION FAILED');
+        }
+      }
+    });
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to start premium payment');
+  }
+}
+
 async function loadCategories() {
-  const res = await axios.get('/categories');
+  const res = await axios.get('/categories', authConfig);
   const select = document.getElementById('category');
   select.innerHTML = '';
 
@@ -172,7 +248,7 @@ async function loadCategories() {
 }
 
 async function loadAccounts() {
-  const res = await axios.get('/accounts');
+  const res = await axios.get('/accounts', authConfig);
   const select = document.getElementById('account');
   select.innerHTML = '';
 
@@ -185,7 +261,7 @@ async function loadAccounts() {
 }
 
 async function loadEditCategories() {
-  const res = await axios.get('/categories');
+  const res = await axios.get('/categories', authConfig);
   const select = document.getElementById('editCategory');
   select.innerHTML = '';
 
@@ -198,7 +274,7 @@ async function loadEditCategories() {
 }
 
 async function loadEditAccounts() {
-  const res = await axios.get('/accounts');
+  const res = await axios.get('/accounts', authConfig);
   const select = document.getElementById('editAccount');
   select.innerHTML = '';
 
@@ -394,6 +470,7 @@ function toggleTheme() {
 
 function logout() {
   localStorage.removeItem('token');
+  localStorage.removeItem('isPremium');
   window.location.href = 'login.html';
 }
 

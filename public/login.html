@@ -53,6 +53,11 @@
               </div>
 
               <div class="mb-3">
+                <label class="form-label">Phone</label>
+                <input type="text" id="signupPhone" class="form-control" />
+              </div>
+
+              <div class="mb-3">
                 <label class="form-label">Password</label>
                 <input type="password" id="signupPassword" class="form-control" />
               </div>
@@ -95,6 +100,7 @@
         await axios.post('/users/signup', {
           name: document.getElementById('signupName').value,
           email: document.getElementById('signupEmail').value,
+          phone: document.getElementById('signupPhone').value,
           password: document.getElementById('signupPassword').value
         });
 
@@ -116,6 +122,7 @@
         });
 
         localStorage.setItem('token', res.data.token);
+        localStorage.setItem('isPremium', String(res.data.user.isPremium));
         window.location.href = 'index.html';
       } catch (err) {
         document.getElementById('authMessage').className = 'text-center mt-3 mb-0 small text-danger';

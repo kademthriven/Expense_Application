@@ -4,9 +4,9 @@ const User = require('../models/user');
 
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, phone, password } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !phone || !password) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
@@ -20,6 +20,7 @@ exports.signup = async (req, res) => {
     await User.create({
       name,
       email,
+      phone,
       password: hashedPassword
     });
 
@@ -37,24 +38,35 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({
+      where: { email },
+      attributes: ['id', 'name', 'email', 'password', 'isPremium']
+    });
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) {
       return res.status(401).json({ error: 'Wrong password' });
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET
+      { id: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES }
     );
 
-    return res.status(200).json({
-      message: 'Login successful',
-      token
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        isPremium: user.isPremium
+      }
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
