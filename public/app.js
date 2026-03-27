@@ -14,6 +14,10 @@ let currentPage = 1;
 let totalPages = 1;
 let currentChart = null;
 let editModalInstance = null;
+let premiumPurchaseModalInstance = null;
+let cancelPaymentConfirmModalInstance = null;
+
+let activePremiumOrder = null;
 
 function getTodayLocal() {
   return new Date().toLocaleDateString('en-CA');
@@ -82,9 +86,43 @@ async function refreshPremiumUI() {
 
     document.getElementById('premiumBadge').classList.toggle('d-none', !isPremium);
     document.getElementById('buyPremiumBtn').classList.toggle('d-none', isPremium);
+    document.getElementById('premiumBanner').classList.toggle('d-none', !isPremium);
+
+    if (isPremium) {
+      await loadLeaderboard();
+    } else {
+      document.getElementById('leaderboardSection').classList.add('d-none');
+    }
   } catch (err) {
     console.log(err);
   }
+}
+
+async function loadLeaderboard() {
+  try {
+    const res = await axios.get('/premium/leaderboard', authConfig);
+    const tbody = document.getElementById('leaderboardBody');
+    tbody.innerHTML = '';
+
+    res.data.forEach((item) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${item.rank}</td>
+        <td>${item.name}</td>
+        <td>${item.email}</td>
+        <td>₹${item.totalExpense}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('leaderboardSection').classList.remove('d-none');
+  } catch (err) {
+    document.getElementById('leaderboardSection').classList.add('d-none');
+  }
+}
+
+function openPremiumPurchaseModal() {
+  premiumPurchaseModalInstance.show();
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -112,6 +150,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   editModalInstance = new bootstrap.Modal(document.getElementById('editTransactionModal'));
+  premiumPurchaseModalInstance = new bootstrap.Modal(document.getElementById('premiumPurchaseModal'));
+  cancelPaymentConfirmModalInstance = new bootstrap.Modal(document.getElementById('cancelPaymentConfirmModal'));
 
   document.getElementById('date').value = getTodayLocal();
   document.getElementById('dailyFilter').value = getTodayLocal();
@@ -159,6 +199,7 @@ document.getElementById('transactionForm').addEventListener('submit', async (e) 
 
     await loadSummary();
     await loadTransactions();
+    await refreshPremiumUI();
   } catch (err) {
     alert(err.response?.data?.error || 'Failed to add transaction');
   }
@@ -186,51 +227,116 @@ document.getElementById('editTransactionForm').addEventListener('submit', async 
     editModalInstance.hide();
     await loadSummary();
     await loadTransactions();
+    await refreshPremiumUI();
   } catch (err) {
     alert(err.response?.data?.error || 'Update failed');
   }
 });
 
+async function launchCashfreeCheckout(orderData) {
+  const cashfree = Cashfree({
+    mode: orderData.environment === 'production' ? 'production' : 'sandbox'
+  });
+
+  const checkoutOptions = {
+    paymentSessionId: orderData.paymentSessionId,
+    redirectTarget: '_modal'
+  };
+
+  cashfree.checkout(checkoutOptions).then(async (result) => {
+    if (result.error) {
+      cancelPaymentConfirmModalInstance.show();
+      return;
+    }
+
+    if (result.redirect) {
+      console.log('Payment redirected');
+      return;
+    }
+
+    if (result.paymentDetails) {
+      await checkPremiumOrderAndShowMessage(orderData.orderId);
+    }
+  });
+}
+
 async function buyPremiumMembership() {
   try {
+    premiumPurchaseModalInstance.hide();
+
     const response = await axios.post('/premium/create-order', {}, authConfig);
 
-    const cashfree = Cashfree({
-      mode: response.data.environment === 'production' ? 'production' : 'sandbox'
-    });
-
-    const checkoutOptions = {
+    activePremiumOrder = {
+      orderId: response.data.orderId,
       paymentSessionId: response.data.paymentSessionId,
-      redirectTarget: '_modal'
+      environment: response.data.environment
     };
 
-    cashfree.checkout(checkoutOptions).then(async (result) => {
-      if (result.error) {
-        console.log(result.error);
-        await refreshPremiumUI();
-        alert('TRANSACTION FAILED');
-      }
-
-      if (result.redirect) {
-        console.log('Payment will be redirected');
-      }
-
-      if (result.paymentDetails) {
-        console.log(result.paymentDetails.paymentMessage);
-
-        await refreshPremiumUI();
-
-        const premiumRes = await axios.get('/premium/status', authConfig);
-
-        if (premiumRes.data.isPremium) {
-          alert('Transaction successful');
-        } else {
-          alert('TRANSACTION FAILED');
-        }
-      }
-    });
+    await launchCashfreeCheckout(activePremiumOrder);
   } catch (err) {
     alert(err.response?.data?.error || 'Failed to start premium payment');
+  }
+}
+
+async function resumePremiumPayment() {
+  cancelPaymentConfirmModalInstance.hide();
+
+  if (!activePremiumOrder) {
+    alert('No active payment found');
+    return;
+  }
+
+  await launchCashfreeCheckout(activePremiumOrder);
+}
+
+async function confirmCancelPayment() {
+  try {
+    if (!activePremiumOrder) {
+      cancelPaymentConfirmModalInstance.hide();
+      alert('Payment cancelled');
+      return;
+    }
+
+    await axios.post(
+      `/premium/cancel-order/${activePremiumOrder.orderId}`,
+      {},
+      authConfig
+    );
+
+    cancelPaymentConfirmModalInstance.hide();
+    alert('Payment cancelled');
+    activePremiumOrder = null;
+  } catch (err) {
+    alert(err.response?.data?.error || 'Unable to cancel payment');
+  }
+}
+
+async function checkPremiumOrderAndShowMessage(orderId) {
+  try {
+    const verifyRes = await axios.get(`/premium/check-order/${orderId}`, authConfig);
+
+    if (verifyRes.data.status === 'SUCCESSFUL') {
+      await refreshPremiumUI();
+      alert('Transaction successful');
+      activePremiumOrder = null;
+      return;
+    }
+
+    if (verifyRes.data.status === 'FAILED') {
+      alert('TRANSACTION FAILED');
+      activePremiumOrder = null;
+      return;
+    }
+
+    if (verifyRes.data.status === 'CANCELLED') {
+      alert('Payment cancelled');
+      activePremiumOrder = null;
+      return;
+    }
+
+    alert('Payment is pending. Please check again in a moment.');
+  } catch (err) {
+    alert('Unable to verify payment status');
   }
 }
 
@@ -415,6 +521,7 @@ async function deleteTransaction(id) {
     await axios.delete(`/transactions/${id}`, authConfig);
     await loadSummary();
     await loadTransactions();
+    await refreshPremiumUI();
   } catch (err) {
     alert(err.response?.data?.error || 'Delete failed');
   }

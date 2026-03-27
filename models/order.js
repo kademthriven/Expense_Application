@@ -20,7 +20,7 @@ const Order = sequelize.define('order', {
     allowNull: false
   },
   status: {
-    type: DataTypes.ENUM('PENDING', 'SUCCESSFUL', 'FAILED'),
+    type: DataTypes.ENUM('PENDING', 'SUCCESSFUL', 'FAILED', 'CANCELLED'),
     defaultValue: 'PENDING'
   }
 });
