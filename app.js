@@ -19,6 +19,7 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const premiumRoutes = require('./routes/premiumRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -51,6 +52,7 @@ app.use('/transactions', transactionRoutes);
 app.use('/categories', categoryRoutes);
 app.use('/accounts', accountRoutes);
 app.use('/premium', premiumRoutes);
+app.use('/ai', aiRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));

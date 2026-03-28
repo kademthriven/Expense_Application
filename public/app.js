@@ -16,7 +16,7 @@ let currentChart = null;
 let editModalInstance = null;
 let premiumPurchaseModalInstance = null;
 let cancelPaymentConfirmModalInstance = null;
-
+let leaderboardLoaded = false;
 let activePremiumOrder = null;
 
 function getTodayLocal() {
@@ -87,10 +87,9 @@ async function refreshPremiumUI() {
     document.getElementById('premiumBadge').classList.toggle('d-none', !isPremium);
     document.getElementById('buyPremiumBtn').classList.toggle('d-none', isPremium);
     document.getElementById('premiumBanner').classList.toggle('d-none', !isPremium);
+    document.getElementById('showLeaderboardBtn').classList.toggle('d-none', !isPremium);
 
-    if (isPremium) {
-      await loadLeaderboard();
-    } else {
+    if (!isPremium) {
       document.getElementById('leaderboardSection').classList.add('d-none');
     }
   } catch (err) {
@@ -115,9 +114,70 @@ async function loadLeaderboard() {
       tbody.appendChild(tr);
     });
 
-    document.getElementById('leaderboardSection').classList.remove('d-none');
+    leaderboardLoaded = true;
   } catch (err) {
-    document.getElementById('leaderboardSection').classList.add('d-none');
+    alert(err.response?.data?.error || 'Failed to load leaderboard');
+  }
+}
+
+async function toggleLeaderboard() {
+  const section = document.getElementById('leaderboardSection');
+
+  if (section.classList.contains('d-none')) {
+    section.classList.remove('d-none');
+
+    if (!leaderboardLoaded) {
+      await loadLeaderboard();
+    }
+  } else {
+    section.classList.add('d-none');
+  }
+}
+
+async function loadAIInsights() {
+  try {
+    const res = await axios.get('/ai/insights', authConfig);
+    const section = document.getElementById('aiInsightsSection');
+    const title = document.getElementById('aiInsightsTitle');
+    const list = document.getElementById('aiInsightsList');
+
+    title.innerText = res.data.title || 'AI Insights';
+    list.innerHTML = '';
+
+    (res.data.insights || []).forEach((item) => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      list.appendChild(li);
+    });
+
+    section.classList.remove('d-none');
+  } catch (err) {
+    alert(err.response?.data?.error || 'Unable to load AI insights');
+  }
+}
+
+async function suggestCategoryAI() {
+  try {
+    const description = document.getElementById('description').value;
+    const type = document.getElementById('type').value;
+
+    if (!description.trim()) {
+      alert('Please enter a description first');
+      return;
+    }
+
+    const res = await axios.post(
+      '/ai/suggest-category',
+      { description, type },
+      authConfig
+    );
+
+    document.getElementById('category').value = res.data.categoryId;
+    document.getElementById('aiCategoryHint').innerText =
+      `AI suggested category: ${res.data.categoryName}`;
+  } catch (err) {
+    document.getElementById('aiCategoryHint').innerText = '';
+    alert(err.response?.data?.error || 'AI category suggestion failed');
   }
 }
 
@@ -167,6 +227,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     loadTransactions();
   });
 
+  document.getElementById('description').addEventListener('blur', async () => {
+    const description = document.getElementById('description').value.trim();
+    const type = document.getElementById('type').value;
+
+    if (type === 'expense' && description) {
+      await suggestCategoryAI();
+    }
+  });
+
   await loadCategories();
   await loadAccounts();
   await loadEditCategories();
@@ -195,10 +264,12 @@ document.getElementById('transactionForm').addEventListener('submit', async (e) 
 
     e.target.reset();
     document.getElementById('date').value = getTodayLocal();
+    document.getElementById('aiCategoryHint').innerText = '';
     currentPage = 1;
 
     await loadSummary();
     await loadTransactions();
+    leaderboardLoaded = false;
     await refreshPremiumUI();
   } catch (err) {
     alert(err.response?.data?.error || 'Failed to add transaction');
@@ -227,6 +298,7 @@ document.getElementById('editTransactionForm').addEventListener('submit', async 
     editModalInstance.hide();
     await loadSummary();
     await loadTransactions();
+    leaderboardLoaded = false;
     await refreshPremiumUI();
   } catch (err) {
     alert(err.response?.data?.error || 'Update failed');
@@ -316,6 +388,7 @@ async function checkPremiumOrderAndShowMessage(orderId) {
     const verifyRes = await axios.get(`/premium/check-order/${orderId}`, authConfig);
 
     if (verifyRes.data.status === 'SUCCESSFUL') {
+      leaderboardLoaded = false;
       await refreshPremiumUI();
       alert('Transaction successful');
       activePremiumOrder = null;
@@ -521,6 +594,7 @@ async function deleteTransaction(id) {
     await axios.delete(`/transactions/${id}`, authConfig);
     await loadSummary();
     await loadTransactions();
+    leaderboardLoaded = false;
     await refreshPremiumUI();
   } catch (err) {
     alert(err.response?.data?.error || 'Delete failed');

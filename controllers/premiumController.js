@@ -1,10 +1,8 @@
 const { Cashfree, CFEnvironment } = require('cashfree-pg');
 const crypto = require('crypto');
-const { fn, col, literal } = require('sequelize');
 
 const Order = require('../models/order');
 const User = require('../models/user');
-const Transaction = require('../models/transaction');
 
 function getCashfreeClient() {
   const env =
@@ -257,34 +255,22 @@ exports.getLeaderboard = async (req, res) => {
     const currentUser = await User.findByPk(req.userId);
 
     if (!currentUser || !currentUser.isPremium) {
-      return res.status(403).json({ error: 'Leaderboard is available only for premium users' });
+      return res.status(403).json({
+        error: 'Leaderboard is available only for premium users'
+      });
     }
 
-    const leaderboard = await Transaction.findAll({
-      attributes: [
-        'userId',
-        [fn('SUM', col('amount')), 'totalExpense']
-      ],
-      where: {
-        type: 'expense'
-      },
-      include: [
-        {
-          model: User,
-          attributes: ['id', 'name', 'email']
-        }
-      ],
-      group: ['userId', 'user.id'],
-      order: [[literal('totalExpense'), 'DESC']],
+    const leaderboard = await User.findAll({
+      attributes: ['id', 'name', 'email', 'totalExpense'],
+      order: [['totalExpense', 'DESC']],
       limit: 10
     });
 
-    const formatted = leaderboard.map((item, index) => ({
+    const formatted = leaderboard.map((user, index) => ({
       rank: index + 1,
-      userId: item.userId,
-      name: item.user?.name || 'Unknown',
-      email: item.user?.email || '',
-      totalExpense: Number(item.get('totalExpense') || 0)
+      name: user.name,
+      email: user.email,
+      totalExpense: Number(user.totalExpense || 0)
     }));
 
     return res.json(formatted);

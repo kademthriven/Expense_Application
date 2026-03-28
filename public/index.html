@@ -21,6 +21,12 @@
         <button id="buyPremiumBtn" class="btn btn-warning btn-sm" onclick="openPremiumPurchaseModal()">
           Buy Premium Membership
         </button>
+        <button class="btn btn-info btn-sm d-none" id="showLeaderboardBtn" onclick="toggleLeaderboard()">
+          Show Leaderboard
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="loadAIInsights()">
+          AI Insights
+        </button>
         <button class="btn btn-outline-light btn-sm" onclick="toggleTheme()">Dark Mode</button>
         <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
       </div>
@@ -28,9 +34,15 @@
   </nav>
 
   <div class="container py-4">
-    <!-- Premium Banner -->
     <div id="premiumBanner" class="alert alert-warning text-center fw-bold shadow-sm d-none" role="alert">
       You are a premium user now
+    </div>
+
+    <div id="aiInsightsSection" class="card shadow-sm mb-4 d-none">
+      <div class="card-body">
+        <h5 id="aiInsightsTitle" class="mb-3">AI Insights</h5>
+        <ul id="aiInsightsList" class="mb-0"></ul>
+      </div>
     </div>
 
     <div class="row g-3 mb-4">
@@ -62,7 +74,6 @@
       </div>
     </div>
 
-    <!-- Premium Leaderboard -->
     <div id="leaderboardSection" class="card shadow-sm mb-4 d-none">
       <div class="card-body">
         <h5 class="mb-3">Premium Leaderboard</h5>
@@ -97,7 +108,7 @@
             </select>
           </div>
 
-          <div class="col-md-2">
+          <div class="col-md-3">
             <input type="text" id="description" class="form-control" placeholder="Description" />
           </div>
 
@@ -106,11 +117,21 @@
           </div>
 
           <div class="col-md-2">
-            <select id="category" class="form-select" required></select>
+            <select id="category" class="form-select"></select>
+          </div>
+
+          <div class="col-md-1 d-grid">
+            <button type="button" class="btn btn-outline-primary" onclick="suggestCategoryAI()">
+              AI
+            </button>
           </div>
 
           <div class="col-md-2">
             <select id="account" class="form-select" required></select>
+          </div>
+
+          <div class="col-12">
+            <small id="aiCategoryHint" class="text-muted"></small>
           </div>
 
           <div class="col-12">
@@ -201,7 +222,6 @@
     </div>
   </div>
 
-  <!-- Edit Transaction Modal -->
   <div class="modal fade" id="editTransactionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content border-0 shadow">
@@ -240,7 +260,7 @@
 
               <div class="col-md-3">
                 <label class="form-label">Category</label>
-                <select id="editCategory" class="form-select" required></select>
+                <select id="editCategory" class="form-select"></select>
               </div>
 
               <div class="col-md-3">
@@ -259,7 +279,6 @@
     </div>
   </div>
 
-  <!-- Premium Purchase Modal -->
   <div class="modal fade" id="premiumPurchaseModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow">
@@ -285,7 +304,6 @@
     </div>
   </div>
 
-  <!-- Cancel Confirmation Modal -->
   <div class="modal fade" id="cancelPaymentConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow">

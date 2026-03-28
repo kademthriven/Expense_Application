@@ -3,26 +3,94 @@ const ExcelJS = require('exceljs');
 const Transaction = require('../models/transaction');
 const Category = require('../models/category');
 const Account = require('../models/account');
+const User = require('../models/user');
+const { suggestCategoryWithGemini } = require('../services/geminiService');
+
+function buildDateFilter(view, selectedDate, selectedMonth, selectedYear) {
+  const where = {};
+
+  if (view === 'daily' && selectedDate) {
+    where.date = selectedDate;
+  }
+
+  if (view === 'monthly' && selectedMonth) {
+    const [year, month] = selectedMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const end = new Date(Number(year), Number(month), 0);
+    const endDate = `${year}-${month}-${String(end.getDate()).padStart(2, '0')}`;
+
+    where.date = {
+      [Op.between]: [startDate, endDate]
+    };
+  }
+
+  if (view === 'yearly' && selectedYear) {
+    where.date = {
+      [Op.between]: [`${selectedYear}-01-01`, `${selectedYear}-12-31`]
+    };
+  }
+
+  return where;
+}
+
+async function resolveCategoryId({ categoryId, description, type }) {
+  if (categoryId) return categoryId;
+
+  const categories = await Category.findAll({ order: [['name', 'ASC']] });
+
+  if (!categories.length) {
+    throw new Error('No categories found');
+  }
+
+  if (description && description.trim()) {
+    const suggested = await suggestCategoryWithGemini(description, categories, type);
+    if (suggested) return suggested.id;
+  }
+
+  const fallbackName = type === 'income' ? 'Salary' : 'Other';
+  const fallback =
+    categories.find((c) => c.name.toLowerCase() === fallbackName.toLowerCase()) ||
+    categories[0];
+
+  return fallback.id;
+}
 
 exports.add = async (req, res) => {
   try {
     const { amount, description, type, date, categoryId, accountId } = req.body;
 
-    if (!amount || !type || !categoryId || !accountId) {
-      return res.status(400).json({ error: 'Amount, type, category and account are required' });
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    if (!type || !accountId) {
+      return res.status(400).json({ error: 'Amount, type and account are required' });
     }
 
     const safeDate = date || new Date().toLocaleDateString('en-CA');
+    const numericAmount = Number(amount);
+    const finalCategoryId = await resolveCategoryId({
+      categoryId,
+      description,
+      type
+    });
 
     const transaction = await Transaction.create({
-      amount,
-      description,
+      amount: numericAmount,
+      description: description || '',
       type,
       date: safeDate,
-      categoryId,
+      categoryId: finalCategoryId,
       accountId,
       userId: req.userId
     });
+
+    if (type === 'expense') {
+      const user = await User.findByPk(req.userId);
+      if (user) {
+        await user.increment('totalExpense', { by: numericAmount });
+      }
+    }
 
     return res.status(201).json(transaction);
   } catch (err) {
@@ -38,31 +106,10 @@ exports.getAll = async (req, res) => {
 
     const { search, view, selectedDate, selectedMonth, selectedYear } = req.query;
 
-    const where = { userId: req.userId };
-
-    if (view === 'daily' && selectedDate) {
-      where.date = selectedDate;
-    }
-
-    if (view === 'monthly' && selectedMonth) {
-      const [year, month] = selectedMonth.split('-');
-      const startDate = `${year}-${month}-01`;
-      const end = new Date(Number(year), Number(month), 0);
-      const endDate = `${year}-${month}-${String(end.getDate()).padStart(2, '0')}`;
-
-      where.date = {
-        [Op.between]: [startDate, endDate]
-      };
-    }
-
-    if (view === 'yearly' && selectedYear) {
-      const startDate = `${selectedYear}-01-01`;
-      const endDate = `${selectedYear}-12-31`;
-
-      where.date = {
-        [Op.between]: [startDate, endDate]
-      };
-    }
+    const where = {
+      userId: req.userId,
+      ...buildDateFilter(view, selectedDate, selectedMonth, selectedYear)
+    };
 
     if (search) {
       where.description = {
@@ -95,28 +142,11 @@ exports.getAll = async (req, res) => {
 exports.summary = async (req, res) => {
   try {
     const { view, selectedDate, selectedMonth, selectedYear } = req.query;
-    const where = { userId: req.userId };
 
-    if (view === 'daily' && selectedDate) {
-      where.date = selectedDate;
-    }
-
-    if (view === 'monthly' && selectedMonth) {
-      const [year, month] = selectedMonth.split('-');
-      const startDate = `${year}-${month}-01`;
-      const end = new Date(Number(year), Number(month), 0);
-      const endDate = `${year}-${month}-${String(end.getDate()).padStart(2, '0')}`;
-
-      where.date = {
-        [Op.between]: [startDate, endDate]
-      };
-    }
-
-    if (view === 'yearly' && selectedYear) {
-      where.date = {
-        [Op.between]: [`${selectedYear}-01-01`, `${selectedYear}-12-31`]
-      };
-    }
+    const where = {
+      userId: req.userId,
+      ...buildDateFilter(view, selectedDate, selectedMonth, selectedYear)
+    };
 
     const transactions = await Transaction.findAll({ where });
 
@@ -142,6 +172,10 @@ exports.update = async (req, res) => {
   try {
     const { amount, description, type, date, categoryId, accountId } = req.body;
 
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
     const transaction = await Transaction.findOne({
       where: { id: req.params.id, userId: req.userId }
     });
@@ -150,12 +184,33 @@ exports.update = async (req, res) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    await transaction.update({
-      amount,
+    const user = await User.findByPk(req.userId);
+    const oldAmount = Number(transaction.amount);
+    const newAmount = Number(amount);
+    const oldType = transaction.type;
+    const newType = type;
+    const finalCategoryId = await resolveCategoryId({
+      categoryId,
       description,
+      type
+    });
+
+    if (user) {
+      if (oldType === 'expense') {
+        await user.decrement('totalExpense', { by: oldAmount });
+      }
+
+      if (newType === 'expense') {
+        await user.increment('totalExpense', { by: newAmount });
+      }
+    }
+
+    await transaction.update({
+      amount: newAmount,
+      description: description || '',
       type,
       date,
-      categoryId,
+      categoryId: finalCategoryId,
       accountId
     });
 
@@ -167,16 +222,25 @@ exports.update = async (req, res) => {
 
 exports.remove = async (req, res) => {
   try {
-    const deleted = await Transaction.destroy({
+    const transaction = await Transaction.findOne({
       where: {
         id: req.params.id,
         userId: req.userId
       }
     });
 
-    if (!deleted) {
+    if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
+
+    if (transaction.type === 'expense') {
+      const user = await User.findByPk(req.userId);
+      if (user) {
+        await user.decrement('totalExpense', { by: Number(transaction.amount) });
+      }
+    }
+
+    await transaction.destroy();
 
     return res.json({ message: 'Deleted successfully' });
   } catch (err) {
