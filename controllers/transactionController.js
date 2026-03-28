@@ -1,5 +1,7 @@
 const { Op } = require('sequelize');
 const ExcelJS = require('exceljs');
+const sequelize = require('../config/database');
+
 const Transaction = require('../models/transaction');
 const Category = require('../models/category');
 const Account = require('../models/account');
@@ -33,10 +35,13 @@ function buildDateFilter(view, selectedDate, selectedMonth, selectedYear) {
   return where;
 }
 
-async function resolveCategoryId({ categoryId, description, type }) {
+async function resolveCategoryId({ categoryId, description, type, transaction }) {
   if (categoryId) return categoryId;
 
-  const categories = await Category.findAll({ order: [['name', 'ASC']] });
+  const categories = await Category.findAll({
+    order: [['name', 'ASC']],
+    transaction
+  });
 
   if (!categories.length) {
     throw new Error('No categories found');
@@ -56,44 +61,55 @@ async function resolveCategoryId({ categoryId, description, type }) {
 }
 
 exports.add = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { amount, description, type, date, categoryId, accountId } = req.body;
 
     if (!amount || Number(amount) <= 0) {
+      await t.rollback();
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
     if (!type || !accountId) {
+      await t.rollback();
       return res.status(400).json({ error: 'Amount, type and account are required' });
     }
 
     const safeDate = date || new Date().toLocaleDateString('en-CA');
     const numericAmount = Number(amount);
+
     const finalCategoryId = await resolveCategoryId({
       categoryId,
       description,
-      type
+      type,
+      transaction: t
     });
 
-    const transaction = await Transaction.create({
-      amount: numericAmount,
-      description: description || '',
-      type,
-      date: safeDate,
-      categoryId: finalCategoryId,
-      accountId,
-      userId: req.userId
-    });
+    const transactionRow = await Transaction.create(
+      {
+        amount: numericAmount,
+        description: description || '',
+        type,
+        date: safeDate,
+        categoryId: finalCategoryId,
+        accountId,
+        userId: req.userId
+      },
+      { transaction: t }
+    );
 
     if (type === 'expense') {
-      const user = await User.findByPk(req.userId);
+      const user = await User.findByPk(req.userId, { transaction: t });
       if (user) {
-        await user.increment('totalExpense', { by: numericAmount });
+        await user.increment('totalExpense', { by: numericAmount, transaction: t });
       }
     }
 
-    return res.status(201).json(transaction);
+    await t.commit();
+    return res.status(201).json(transactionRow);
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: err.message });
   }
 };
@@ -169,81 +185,112 @@ exports.summary = async (req, res) => {
 };
 
 exports.update = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { amount, description, type, date, categoryId, accountId } = req.body;
 
     if (!amount || Number(amount) <= 0) {
+      await t.rollback();
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
-    const transaction = await Transaction.findOne({
-      where: { id: req.params.id, userId: req.userId }
+    const transactionRow = await Transaction.findOne({
+      where: { id: req.params.id, userId: req.userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE
     });
 
-    if (!transaction) {
+    if (!transactionRow) {
+      await t.rollback();
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    const user = await User.findByPk(req.userId);
-    const oldAmount = Number(transaction.amount);
+    const user = await User.findByPk(req.userId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    const oldAmount = Number(transactionRow.amount);
     const newAmount = Number(amount);
-    const oldType = transaction.type;
+    const oldType = transactionRow.type;
     const newType = type;
+
     const finalCategoryId = await resolveCategoryId({
       categoryId,
       description,
-      type
+      type,
+      transaction: t
     });
 
     if (user) {
       if (oldType === 'expense') {
-        await user.decrement('totalExpense', { by: oldAmount });
+        await user.decrement('totalExpense', { by: oldAmount, transaction: t });
       }
 
       if (newType === 'expense') {
-        await user.increment('totalExpense', { by: newAmount });
+        await user.increment('totalExpense', { by: newAmount, transaction: t });
       }
     }
 
-    await transaction.update({
-      amount: newAmount,
-      description: description || '',
-      type,
-      date,
-      categoryId: finalCategoryId,
-      accountId
-    });
+    await transactionRow.update(
+      {
+        amount: newAmount,
+        description: description || '',
+        type,
+        date,
+        categoryId: finalCategoryId,
+        accountId
+      },
+      { transaction: t }
+    );
 
+    await t.commit();
     return res.json({ message: 'Updated successfully' });
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: err.message });
   }
 };
 
 exports.remove = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
-    const transaction = await Transaction.findOne({
+    const transactionRow = await Transaction.findOne({
       where: {
         id: req.params.id,
         userId: req.userId
-      }
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
     });
 
-    if (!transaction) {
+    if (!transactionRow) {
+      await t.rollback();
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    if (transaction.type === 'expense') {
-      const user = await User.findByPk(req.userId);
+    if (transactionRow.type === 'expense') {
+      const user = await User.findByPk(req.userId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE
+      });
+
       if (user) {
-        await user.decrement('totalExpense', { by: Number(transaction.amount) });
+        await user.decrement('totalExpense', {
+          by: Number(transactionRow.amount),
+          transaction: t
+        });
       }
     }
 
-    await transaction.destroy();
+    await transactionRow.destroy({ transaction: t });
 
+    await t.commit();
     return res.json({ message: 'Deleted successfully' });
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: err.message });
   }
 };

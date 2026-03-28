@@ -1,5 +1,6 @@
 const { Cashfree, CFEnvironment } = require('cashfree-pg');
 const crypto = require('crypto');
+const sequelize = require('../config/database');
 
 const Order = require('../models/order');
 const User = require('../models/user');
@@ -18,14 +19,21 @@ function getCashfreeClient() {
 }
 
 exports.createPremiumOrder = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
-    const user = await User.findByPk(req.userId);
+    const user = await User.findByPk(req.userId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
 
     if (!user) {
+      await t.rollback();
       return res.status(404).json({ error: 'User not found' });
     }
 
     if (user.isPremium) {
+      await t.rollback();
       return res.status(400).json({ error: 'You are already a premium user' });
     }
 
@@ -55,14 +63,19 @@ exports.createPremiumOrder = async (req, res) => {
     const response = await cashfree.PGCreateOrder(request);
     const data = response.data;
 
-    await Order.create({
-      orderId,
-      cfOrderId: data.cf_order_id || null,
-      paymentSessionId: data.payment_session_id,
-      amount,
-      status: 'PENDING',
-      userId: req.userId
-    });
+    await Order.create(
+      {
+        orderId,
+        cfOrderId: data.cf_order_id || null,
+        paymentSessionId: data.payment_session_id,
+        amount,
+        status: 'PENDING',
+        userId: req.userId
+      },
+      { transaction: t }
+    );
+
+    await t.commit();
 
     return res.json({
       orderId,
@@ -70,6 +83,7 @@ exports.createPremiumOrder = async (req, res) => {
       environment: process.env.CASHFREE_ENV
     });
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({
       error:
         err.response?.data?.message ||
@@ -81,26 +95,34 @@ exports.createPremiumOrder = async (req, res) => {
 };
 
 exports.checkPremiumOrderStatus = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { orderId } = req.params;
 
     const order = await Order.findOne({
-      where: { orderId, userId: req.userId }
+      where: { orderId, userId: req.userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE
     });
 
     if (!order) {
+      await t.rollback();
       return res.status(404).json({ error: 'Order not found' });
     }
 
     if (order.status === 'SUCCESSFUL') {
+      await t.commit();
       return res.json({ status: 'SUCCESSFUL', isPremium: true });
     }
 
     if (order.status === 'FAILED') {
+      await t.commit();
       return res.json({ status: 'FAILED', isPremium: false });
     }
 
     if (order.status === 'CANCELLED') {
+      await t.commit();
       return res.json({ status: 'CANCELLED', isPremium: false });
     }
 
@@ -114,60 +136,83 @@ exports.checkPremiumOrderStatus = async (req, res) => {
     );
 
     if (successPayment) {
-      await order.update({ status: 'SUCCESSFUL' });
+      await order.update({ status: 'SUCCESSFUL' }, { transaction: t });
 
-      const user = await User.findByPk(order.userId);
+      const user = await User.findByPk(order.userId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE
+      });
+
       if (user) {
-        await user.update({ isPremium: true });
+        await user.update({ isPremium: true }, { transaction: t });
       }
 
+      await t.commit();
       return res.json({ status: 'SUCCESSFUL', isPremium: true });
     }
 
     if (failedPayment) {
-      await order.update({ status: 'FAILED' });
+      await order.update({ status: 'FAILED' }, { transaction: t });
+      await t.commit();
       return res.json({ status: 'FAILED', isPremium: false });
     }
 
+    await t.commit();
     return res.json({ status: 'PENDING', isPremium: false });
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: 'Unable to verify payment status' });
   }
 };
 
 exports.cancelPremiumOrder = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { orderId } = req.params;
 
     const order = await Order.findOne({
-      where: { orderId, userId: req.userId }
+      where: { orderId, userId: req.userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE
     });
 
     if (!order) {
+      await t.rollback();
       return res.status(404).json({ error: 'Order not found' });
     }
 
     if (order.status === 'PENDING') {
-      await order.update({ status: 'CANCELLED' });
+      await order.update({ status: 'CANCELLED' }, { transaction: t });
     }
 
+    await t.commit();
     return res.json({ message: 'Order cancelled', status: order.status });
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: err.message });
   }
 };
 
 exports.verifyPremiumOrder = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { order_id } = req.query;
 
     if (!order_id) {
+      await t.rollback();
       return res.redirect('/index.html?payment=failed');
     }
 
-    const order = await Order.findOne({ where: { orderId: order_id } });
+    const order = await Order.findOne({
+      where: { orderId: order_id },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
 
     if (!order) {
+      await t.rollback();
       return res.redirect('/index.html?payment=failed');
     }
 
@@ -181,56 +226,79 @@ exports.verifyPremiumOrder = async (req, res) => {
     );
 
     if (successPayment) {
-      await order.update({ status: 'SUCCESSFUL' });
+      await order.update({ status: 'SUCCESSFUL' }, { transaction: t });
 
-      const user = await User.findByPk(order.userId);
+      const user = await User.findByPk(order.userId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE
+      });
+
       if (user) {
-        await user.update({ isPremium: true });
+        await user.update({ isPremium: true }, { transaction: t });
       }
 
+      await t.commit();
       return res.redirect('/index.html?payment=success');
     }
 
     if (failedPayment) {
-      await order.update({ status: 'FAILED' });
+      await order.update({ status: 'FAILED' }, { transaction: t });
+      await t.commit();
       return res.redirect('/index.html?payment=failed');
     }
 
+    await t.commit();
     return res.redirect('/index.html?payment=pending');
   } catch (err) {
+    await t.rollback();
     return res.redirect('/index.html?payment=failed');
   }
 };
 
 exports.cashfreeWebhook = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const eventType = req.body?.type;
     const orderId = req.body?.data?.order?.order_id;
 
     if (!orderId) {
+      await t.commit();
       return res.status(200).json({ ok: true });
     }
 
-    const order = await Order.findOne({ where: { orderId } });
+    const order = await Order.findOne({
+      where: { orderId },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
     if (!order) {
+      await t.commit();
       return res.status(200).json({ ok: true });
     }
 
     if (eventType === 'PAYMENT_SUCCESS_WEBHOOK') {
-      await order.update({ status: 'SUCCESSFUL' });
+      await order.update({ status: 'SUCCESSFUL' }, { transaction: t });
 
-      const user = await User.findByPk(order.userId);
+      const user = await User.findByPk(order.userId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE
+      });
+
       if (user) {
-        await user.update({ isPremium: true });
+        await user.update({ isPremium: true }, { transaction: t });
       }
     }
 
     if (eventType === 'PAYMENT_FAILED_WEBHOOK') {
-      await order.update({ status: 'FAILED' });
+      await order.update({ status: 'FAILED' }, { transaction: t });
     }
 
+    await t.commit();
     return res.status(200).json({ ok: true });
   } catch (err) {
+    await t.rollback();
     return res.status(200).json({ ok: true });
   }
 };

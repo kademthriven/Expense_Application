@@ -1,31 +1,46 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const sequelize = require('../config/database');
 const User = require('../models/user');
 
 exports.signup = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { name, email, phone, password } = req.body;
 
     if (!name || !email || !phone || !password) {
+      await t.rollback();
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await User.findOne({
+      where: { email },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
     if (existingUser) {
+      await t.rollback();
       return res.status(400).json({ error: 'Email already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await User.create({
-      name,
-      email,
-      phone,
-      password: hashedPassword
-    });
+    await User.create(
+      {
+        name,
+        email,
+        phone,
+        password: hashedPassword
+      },
+      { transaction: t }
+    );
 
+    await t.commit();
     return res.status(201).json({ message: 'Signup successful' });
   } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: err.message });
   }
 };
