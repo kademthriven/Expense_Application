@@ -22,7 +22,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const premiumRoutes = require('./routes/premiumRoutes');
 const aiRoutes = require('./routes/aiRoutes');
-// const reportRoutes = require('./routes/reportRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -60,7 +60,7 @@ app.use('/categories', categoryRoutes);
 app.use('/accounts', accountRoutes);
 app.use('/premium', premiumRoutes);
 app.use('/ai', aiRoutes);
-// app.use('/reports', reportRoutes);
+app.use('/reports', reportRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));

@@ -12,12 +12,14 @@ const authConfig = {
 
 let currentPage = 1;
 let totalPages = 1;
+let pageSize = 5;
 let currentChart = null;
 let editModalInstance = null;
 let premiumPurchaseModalInstance = null;
 let cancelPaymentConfirmModalInstance = null;
 let leaderboardLoaded = false;
 let activePremiumOrder = null;
+let currentUserIsPremium = false;
 
 function getTodayLocal() {
   return new Date().toLocaleDateString('en-CA');
@@ -38,6 +40,7 @@ function getFilterParams() {
   const view = document.getElementById('viewType').value;
   const params = {
     page: currentPage,
+    limit: pageSize,
     search: document.getElementById('searchInput').value,
     view
   };
@@ -81,6 +84,7 @@ async function refreshPremiumUI() {
   try {
     const res = await axios.get('/premium/status', authConfig);
     const isPremium = !!res.data.isPremium;
+    currentUserIsPremium = isPremium;
 
     localStorage.setItem('isPremium', String(isPremium));
 
@@ -89,8 +93,13 @@ async function refreshPremiumUI() {
     document.getElementById('premiumBanner').classList.toggle('d-none', !isPremium);
     document.getElementById('showLeaderboardBtn').classList.toggle('d-none', !isPremium);
 
+    document.getElementById('showReportBtn').disabled = !isPremium;
+    document.getElementById('downloadReportBtn').disabled = !isPremium;
+    document.getElementById('reportPremiumNote').innerText = isPremium ? '' : 'Premium only';
+
     if (!isPremium) {
       document.getElementById('leaderboardSection').classList.add('d-none');
+      document.getElementById('downloadReportBtn').disabled = true;
     }
   } catch (err) {
     console.log(err);
@@ -121,6 +130,11 @@ async function loadLeaderboard() {
 }
 
 async function toggleLeaderboard() {
+  if (!currentUserIsPremium) {
+    alert('Leaderboard is available only for premium users');
+    return;
+  }
+
   const section = document.getElementById('leaderboardSection');
 
   if (section.classList.contains('d-none')) {
@@ -131,6 +145,283 @@ async function toggleLeaderboard() {
     }
   } else {
     section.classList.add('d-none');
+  }
+}
+
+function toggleReportSection() {
+  if (!currentUserIsPremium) {
+    alert('Report generation is available only for premium users');
+    return;
+  }
+
+  document.getElementById('reportSection').classList.toggle('d-none');
+}
+
+async function generatePremiumReport() {
+  try {
+    if (!currentUserIsPremium) {
+      alert('Report generation is available only for premium users');
+      return;
+    }
+
+    const view = document.getElementById('reportView').value;
+    const selectedDate = document.getElementById('reportDate').value || getTodayLocal();
+
+    const res = await axios.get('/reports', {
+      ...authConfig,
+      params: { view, selectedDate }
+    });
+
+    document.getElementById('reportMainLabel').innerText =
+      view === 'monthly' ? selectedDate.slice(0, 4) : 'Premium Report';
+
+    document.getElementById('reportSubLabel').innerText = `${view.toUpperCase()} • ${res.data.label}`;
+
+    document.getElementById('reportTotalIncome').innerText = `₹${res.data.summary.income}`;
+    document.getElementById('reportTotalExpense').innerText = `₹${res.data.summary.expense}`;
+    document.getElementById('reportSavings').innerText = `₹${res.data.summary.savings}`;
+
+    const transactionBody = document.getElementById('reportTransactionsBody');
+    transactionBody.innerHTML = '';
+
+    if (!res.data.transactions.length) {
+      transactionBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="text-center text-muted">No transactions found for this report</td>
+        </tr>
+      `;
+    } else {
+      res.data.transactions.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.date}</td>
+          <td>${item.description || ''}</td>
+          <td>${item.category}</td>
+          <td>${item.income ? `₹${item.income}` : ''}</td>
+          <td>${item.expense ? `₹${item.expense}` : ''}</td>
+        `;
+        transactionBody.appendChild(tr);
+      });
+    }
+
+    const categoryBody = document.getElementById('reportCategoryBody');
+    categoryBody.innerHTML = '';
+
+    if (!res.data.categorySummary.length) {
+      categoryBody.innerHTML = `
+        <tr>
+          <td colspan="2" class="text-center text-muted">No expense category summary available</td>
+        </tr>
+      `;
+    } else {
+      res.data.categorySummary.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.category}</td>
+          <td>₹${item.totalAmount}</td>
+        `;
+        categoryBody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('downloadReportBtn').disabled = false;
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to generate report');
+  }
+}
+
+async function downloadPremiumReport() {
+  try {
+    if (!currentUserIsPremium) {
+      alert('Download is available only for premium users');
+      return;
+    }
+
+    const view = document.getElementById('reportView').value;
+    const selectedDate = document.getElementById('reportDate').value || getTodayLocal();
+
+    const res = await axios.get('/reports', {
+      ...authConfig,
+      params: { view, selectedDate }
+    });
+
+    const report = res.data;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    const primaryColor = [26, 155, 174];
+    const greenColor = [34, 139, 34];
+    const redColor = [220, 53, 69];
+    const blueColor = [13, 110, 253];
+    const darkColor = [40, 40, 40];
+    const lightBorder = [190, 190, 190];
+
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(19);
+    doc.setTextColor(...primaryColor);
+    doc.text('Day to Day Expenses', pageWidth / 2, 18, { align: 'center' });
+
+    doc.setFontSize(13);
+    doc.setTextColor(...darkColor);
+    doc.text(
+      view === 'monthly' ? selectedDate.slice(0, 4) : 'Premium Report',
+      pageWidth / 2,
+      27,
+      { align: 'center' }
+    );
+
+    doc.setFontSize(11);
+    doc.text(`${view.charAt(0).toUpperCase() + view.slice(1)} Report`, pageWidth / 2, 34, { align: 'center' });
+    doc.text(report.label || '', pageWidth / 2, 40, { align: 'center' });
+
+    // Transactions table
+    const transactionRows = report.transactions.map((item) => [
+      item.date,
+      item.description || '',
+      item.category || 'Other',
+      item.income ? `₹${Number(item.income).toFixed(2)}` : '',
+      item.expense ? `₹${Number(item.expense).toFixed(2)}` : ''
+    ]);
+
+    doc.autoTable({
+      startY: 48,
+      head: [['Date', 'Description', 'Category', 'Income', 'Expense']],
+      body: transactionRows.length
+        ? transactionRows
+        : [['', 'No transactions found for this report', '', '', '']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: primaryColor,
+        textColor: 255,
+        halign: 'center',
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: darkColor
+      },
+      styles: {
+        lineColor: lightBorder,
+        lineWidth: 0.2,
+        cellPadding: 2.5
+      },
+      columnStyles: {
+        0: { cellWidth: 28 },
+        1: { cellWidth: 52 },
+        2: { cellWidth: 42 },
+        3: { halign: 'right', cellWidth: 30 },
+        4: { halign: 'right', cellWidth: 30 }
+      }
+    });
+
+    let y = doc.lastAutoTable.finalY + 8;
+
+    // Totals section
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+
+    doc.setTextColor(...greenColor);
+    doc.text(`Income : ₹${Number(report.summary.income).toFixed(2)}`, 18, y);
+
+    doc.setTextColor(...redColor);
+    doc.text(`Expense : ₹${Number(report.summary.expense).toFixed(2)}`, 82, y);
+
+    doc.setTextColor(...blueColor);
+    doc.text(`Savings : ₹${Number(report.summary.savings).toFixed(2)}`, 148, y);
+
+    y += 10;
+
+    // Category summary table
+    const categoryRows = report.categorySummary.map((item) => [
+      item.category,
+      `₹${Number(item.totalAmount).toFixed(2)}`
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Category', 'Total Expense']],
+      body: categoryRows.length
+        ? categoryRows
+        : [['No category summary available', '']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: primaryColor,
+        textColor: 255,
+        halign: 'center',
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: darkColor
+      },
+      styles: {
+        lineColor: lightBorder,
+        lineWidth: 0.2,
+        cellPadding: 2.5
+      },
+      columnStyles: {
+        0: { cellWidth: 120 },
+        1: { halign: 'right', cellWidth: 55 }
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+
+    // Notes section
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...darkColor);
+    doc.text('Notes', 14, y);
+
+    const notesRows = [
+      ['1', `Report generated for ${report.label || view}`],
+      ['2', 'Income and expense values are based on filtered report data'],
+      ['3', 'Only premium users can view and download this report']
+    ];
+
+    doc.autoTable({
+      startY: y + 3,
+      head: [['No', 'Notes']],
+      body: notesRows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: primaryColor,
+        textColor: 255,
+        halign: 'center',
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: darkColor
+      },
+      styles: {
+        lineColor: lightBorder,
+        lineWidth: 0.2,
+        cellPadding: 2.5
+      },
+      columnStyles: {
+        0: { cellWidth: 20, halign: 'center' },
+        1: { cellWidth: 155 }
+      }
+    });
+
+    // Footer
+    const footerY = doc.internal.pageSize.getHeight() - 10;
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text('Generated by Expense Tracker Premium', pageWidth / 2, footerY, { align: 'center' });
+
+    doc.save(`premium-report-${view}-${report.label || 'report'}.pdf`);
+  } catch (err) {
+    console.error('downloadPremiumReport error:', err.response?.data || err.message);
+    alert(err.response?.data?.error || 'Failed to download PDF report');
   }
 }
 
@@ -216,9 +507,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('date').value = getTodayLocal();
   document.getElementById('dailyFilter').value = getTodayLocal();
   document.getElementById('monthFilter').value = getCurrentMonthLocal();
+  document.getElementById('reportDate').value = getTodayLocal();
   document.getElementById('yearFilter').value = getCurrentYearLocal();
 
   updateFilterInputs();
+
+  document.getElementById('pageSize').addEventListener('change', () => {
+    pageSize = Number(document.getElementById('pageSize').value);
+    currentPage = 1;
+    loadTransactions();
+  });
 
   document.getElementById('viewType').addEventListener('change', () => {
     updateFilterInputs();
@@ -322,7 +620,6 @@ async function launchCashfreeCheckout(orderData) {
     }
 
     if (result.redirect) {
-      console.log('Payment redirected');
       return;
     }
 
@@ -485,7 +782,7 @@ async function loadTransactions() {
   totalPages = res.data.totalPages || 1;
 
   document.getElementById('pageInfo').innerText =
-    `Page ${res.data.currentPage} of ${totalPages}`;
+    `Page ${res.data.currentPage} of ${totalPages} | Total Items: ${res.data.totalItems}`;
 
   renderTransactions(res.data.transactions);
   renderChart(res.data.transactions);
@@ -603,6 +900,7 @@ async function deleteTransaction(id) {
 
 function applyFilters() {
   currentPage = 1;
+  pageSize = Number(document.getElementById('pageSize').value);
   loadSummary();
   loadTransactions();
 }
