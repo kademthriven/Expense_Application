@@ -27,9 +27,17 @@ const User = sequelize.define('user', {
     defaultValue: false
   },
   totalExpense: {
-  type: DataTypes.FLOAT,
-  defaultValue: 0
- }
+    type: DataTypes.FLOAT,
+    defaultValue: 0
+  },
+  resetPasswordToken: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE,
+    allowNull: true
+  }
 });
 
 module.exports = User;

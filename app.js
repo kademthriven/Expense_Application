@@ -15,11 +15,13 @@ const Order = require('./models/order');
 
 // Routes
 const userRoutes = require('./routes/userRoutes');
+const passwordRoutes = require('./routes/passwordRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const premiumRoutes = require('./routes/premiumRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -48,11 +50,13 @@ Order.belongsTo(User);
 
 // Routes
 app.use('/users', userRoutes);
+app.use('/password', passwordRoutes);
 app.use('/transactions', transactionRoutes);
 app.use('/categories', categoryRoutes);
 app.use('/accounts', accountRoutes);
 app.use('/premium', premiumRoutes);
 app.use('/ai', aiRoutes);
+app.use('/reports', reportRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));

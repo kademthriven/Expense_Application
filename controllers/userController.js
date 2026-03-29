@@ -1,7 +1,11 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { Op } = require('sequelize');
+
 const sequelize = require('../config/database');
 const User = require('../models/user');
+const { sendResetPasswordEmail } = require('../services/mailService');
 
 exports.signup = async (req, res) => {
   const t = await sequelize.transaction();
@@ -84,6 +88,100 @@ exports.login = async (req, res) => {
       }
     });
   } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await User.findOne({
+      where: { email },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    if (!user) {
+      await t.rollback();
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await user.update(
+      {
+        resetPasswordToken: hashedToken,
+        resetPasswordExpires: expiresAt
+      },
+      { transaction: t }
+    );
+
+    const resetLink = `${process.env.APP_BASE_URL}/reset-password.html?token=${rawToken}`;
+
+    await sendResetPasswordEmail(user.email, resetLink);
+
+    await t.commit();
+    return res.json({ message: 'Reset password link sent successfully' });
+  } catch (err) {
+    await t.rollback();
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      where: {
+        resetPasswordToken: hashedToken,
+        resetPasswordExpires: {
+          [Op.gt]: new Date()
+        }
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    if (!user) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await user.update(
+      {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null
+      },
+      { transaction: t }
+    );
+
+    await t.commit();
+    return res.json({ message: 'Password reset successful' });
+  } catch (err) {
+    await t.rollback();
     return res.status(500).json({ error: err.message });
   }
 };
