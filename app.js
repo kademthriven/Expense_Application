@@ -12,6 +12,7 @@ const Transaction = require('./models/transaction');
 const Category = require('./models/category');
 const Account = require('./models/account');
 const Order = require('./models/order');
+const ForgotPasswordRequest = require('./models/forgotPasswordRequest');
 
 // Routes
 const userRoutes = require('./routes/userRoutes');
@@ -21,7 +22,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const premiumRoutes = require('./routes/premiumRoutes');
 const aiRoutes = require('./routes/aiRoutes');
-const reportRoutes = require('./routes/reportRoutes');
+// const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -48,6 +49,9 @@ Transaction.belongsTo(Account);
 User.hasMany(Order);
 Order.belongsTo(User);
 
+User.hasMany(ForgotPasswordRequest);
+ForgotPasswordRequest.belongsTo(User);
+
 // Routes
 app.use('/users', userRoutes);
 app.use('/password', passwordRoutes);
@@ -56,7 +60,7 @@ app.use('/categories', categoryRoutes);
 app.use('/accounts', accountRoutes);
 app.use('/premium', premiumRoutes);
 app.use('/ai', aiRoutes);
-app.use('/reports', reportRoutes);
+// app.use('/reports', reportRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));

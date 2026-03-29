@@ -1,46 +1,40 @@
-const nodemailer = require('nodemailer');
+const Sib = require('sib-api-v3-sdk');
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.MAIL_HOST,
-    port: Number(process.env.MAIL_PORT || 587),
-    secure: String(process.env.MAIL_SECURE) === 'true',
-    auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASS
-    }
-  });
-}
+exports.sendResetPasswordEmail = async (toEmail, resetLink) => {
+  try {
+    const client = Sib.ApiClient.instance;
+    const apiKey = client.authentications['api-key'];
+    apiKey.apiKey = process.env.BREVO_API_KEY;
 
-async function sendResetPasswordEmail(toEmail, resetLink) {
-  if (!process.env.MAIL_USER || !process.env.MAIL_PASS || !process.env.MAIL_FROM) {
-    throw new Error('Mail configuration is missing in .env');
-  }
+    const tranEmailApi = new Sib.TransactionalEmailsApi();
 
-  const transporter = createTransporter();
+    const sender = {
+      email: process.env.MAIL_FROM,
+      name: 'Expense Tracker'
+    };
 
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to: toEmail,
-    subject: 'Reset your Expense Tracker password',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Reset Password</h2>
-        <p>You requested to reset your password.</p>
-        <p>Click the button below to set a new password:</p>
-        <p>
-          <a href="${resetLink}" style="display:inline-block;padding:12px 20px;background:#0d6efd;color:#fff;text-decoration:none;border-radius:6px;">
-            Reset Password
-          </a>
-        </p>
-        <p>This link will expire in 1 hour.</p>
-        <p>If the button does not work, use this link:</p>
+    const receivers = [{ email: toEmail }];
+
+    const response = await tranEmailApi.sendTransacEmail({
+      sender,
+      to: receivers,
+      subject: 'Reset Your Password',
+      htmlContent: `
+        <h2>Password Reset</h2>
+        <p>Click below to reset your password:</p>
+        <a href="${resetLink}" style="padding:10px 15px;background:#007bff;color:white;text-decoration:none;">
+          Reset Password
+        </a>
+        <p>If button does not work, open this URL:</p>
         <p>${resetLink}</p>
-      </div>
-    `
-  });
-}
+      `
+    });
 
-module.exports = {
-  sendResetPasswordEmail
+    console.log('Brevo success response:', response);
+    return response;
+  } catch (err) {
+    console.error('Brevo full error:', err);
+    console.error('Brevo response body:', err.response?.body);
+    throw err;
+  }
 };
