@@ -327,3 +327,410 @@ body {
   font-size: 13px;
   font-weight: 600;
 }
+.report-toolbar .btn {
+  min-width: 140px;
+}
+
+#downloadReportBtn {
+  white-space: nowrap;
+}
+
+#showReportBtn {
+  white-space: nowrap;
+}
+
+/* ===== PREMIUM USER STYLING ===== */
+
+/* Premium Badge Enhancement */
+#premiumBadge {
+  background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+  color: #333 !important;
+  font-weight: 700;
+  padding: 8px 14px !important;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+  animation: premiumPulse 2s ease-in-out infinite;
+  position: relative;
+}
+
+#premiumBadge::before {
+  content: '👑 ';
+  margin-right: 4px;
+}
+
+@keyframes premiumPulse {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+    transform: scale(1.05);
+  }
+}
+
+/* Premium Banner Enhanced */
+#premiumBanner {
+  background: linear-gradient(135deg, #1a9bae 0%, #16c784 100%);
+  border: none;
+  border-radius: 18px;
+  padding: 20px !important;
+  color: white !important;
+  font-size: 1.2rem;
+  box-shadow: 0 8px 25px rgba(26, 155, 174, 0.3);
+  animation: slideInDown 0.6s ease;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Premium Section Styling */
+.premium-section {
+  background: linear-gradient(135deg, rgba(26, 155, 174, 0.05) 0%, rgba(22, 199, 132, 0.05) 100%);
+  border: 2px solid #1a9bae;
+  border-radius: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #1a9bae, #16c784, transparent);
+  animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Premium Card Enhancement */
+.card.premium-card {
+  background: linear-gradient(135deg, #fff 0%, #f0f9ff 100%);
+  border: 2px solid #1a9bae;
+  box-shadow: 0 8px 30px rgba(26, 155, 174, 0.15);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.card.premium-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 40px rgba(26, 155, 174, 0.25);
+  border-color: #16c784;
+}
+
+.card.premium-card::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+/* Premium Report Styling */
+#reportSection.premium-section {
+  background: linear-gradient(135deg, rgba(26, 155, 174, 0.03) 0%, rgba(22, 199, 132, 0.03) 100%);
+}
+
+.report-wrapper .report-toolbar {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e8f5f0 100%);
+  border: 1px solid #1a9bae;
+  box-shadow: 0 8px 24px rgba(26, 155, 174, 0.1);
+}
+
+.report-wrapper .report-sheet {
+  background: linear-gradient(135deg, #fff 0%, #f0f9ff 100%);
+  border: 2px solid #1a9bae;
+  box-shadow: 0 12px 40px rgba(26, 155, 174, 0.15);
+  position: relative;
+}
+
+.report-sheet::before {
+  content: '📊 Premium Report';
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  background: linear-gradient(135deg, #1a9bae, #16c784);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.report-table thead th {
+  background: linear-gradient(135deg, #1a9bae 0%, #16c784 100%);
+  color: white;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Premium Leaderboard Styling */
+#leaderboardSection {
+  background: linear-gradient(135deg, rgba(26, 155, 174, 0.05) 0%, rgba(22, 199, 132, 0.05) 100%);
+  border: 2px solid #1a9bae;
+  box-shadow: 0 8px 30px rgba(26, 155, 174, 0.15);
+}
+
+#leaderboardSection .card-body {
+  padding: 25px;
+}
+
+#leaderboardSection h5 {
+  background: linear-gradient(135deg, #1a9bae, #16c784);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+  margin-bottom: 20px;
+  font-size: 1.3rem;
+}
+
+.leaderboard-table {
+  width: 100%;
+}
+
+.leaderboard-table tbody tr {
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(26, 155, 174, 0.1);
+}
+
+.leaderboard-table tbody tr:hover {
+  background-color: rgba(26, 155, 174, 0.05);
+}
+
+.rank-badge {
+  display: inline-block;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  font-size: 12px;
+}
+
+.rank-badge.rank-1 {
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+}
+
+.rank-badge.rank-2 {
+  background: linear-gradient(135deg, #C0C0C0, #A9A9A9);
+  box-shadow: 0 4px 15px rgba(192, 192, 192, 0.4);
+}
+
+.rank-badge.rank-3 {
+  background: linear-gradient(135deg, #CD7F32, #B87333);
+  box-shadow: 0 4px 15px rgba(205, 127, 50, 0.4);
+}
+
+.rank-badge.rank-other {
+  background: linear-gradient(135deg, #1a9bae, #16c784);
+}
+
+/* AI Insights Premium Styling */
+#aiInsightsSection {
+  background: linear-gradient(135deg, rgba(26, 155, 174, 0.05) 0%, rgba(22, 199, 132, 0.05) 100%);
+  border: 2px solid #1a9bae;
+  box-shadow: 0 8px 30px rgba(26, 155, 174, 0.15);
+}
+
+#aiInsightsSection .card-body {
+  padding: 25px;
+}
+
+#aiInsightsSection h5 {
+  background: linear-gradient(135deg, #1a9bae, #16c784);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+}
+
+#aiInsightsList {
+  list-style: none;
+  padding: 0;
+}
+
+#aiInsightsList li {
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #fff 0%, #f0f9ff 100%);
+  border-left: 4px solid #1a9bae;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+#aiInsightsList li:hover {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e8f5f0 100%);
+  border-left-color: #16c784;
+  transform: translateX(5px);
+}
+
+#aiInsightsList li::before {
+  content: '✨ ';
+  margin-right: 8px;
+  font-weight: 700;
+}
+
+/* Premium Button Styling */
+.btn-premium {
+  background: linear-gradient(135deg, #1a9bae 0%, #16c784 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(26, 155, 174, 0.3);
+}
+
+.btn-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(26, 155, 174, 0.4);
+  color: white;
+}
+
+.btn-premium:active {
+  transform: translateY(0);
+}
+
+/* Enhanced Premium Statistics Cards */
+.stat-card {
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+  transform: translateX(-100%);
+}
+
+.stat-card:hover::before {
+  animation: shine 0.5s ease;
+}
+
+@keyframes shine {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Premium Navbar Enhancement when user has premium */
+.navbar.premium-navbar {
+  background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%) !important;
+  box-shadow: 0 4px 20px rgba(26, 155, 174, 0.2);
+}
+
+/* Dark Mode Premium Support */
+.dark-mode #premiumBadge {
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.6);
+}
+
+.dark-mode #premiumBanner {
+  box-shadow: 0 8px 25px rgba(26, 155, 174, 0.5);
+}
+
+.dark-mode .premium-section {
+  background: linear-gradient(135deg, rgba(26, 155, 174, 0.1) 0%, rgba(22, 199, 132, 0.1) 100%);
+  border-color: #16c784;
+}
+
+.dark-mode .premium-card {
+  background: linear-gradient(135deg, #1f1f1f 0%, #0f3b47 100%);
+  border-color: #16c784;
+}
+
+.dark-mode .report-sheet {
+  background: linear-gradient(135deg, #1f1f1f 0%, #0f3b47 100%);
+  border-color: #16c784;
+}
+
+.dark-mode .report-toolbar {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a3a3f 100%);
+  border-color: #16c784;
+}
+
+.dark-mode #leaderboardSection,
+.dark-mode #aiInsightsSection {
+  background: linear-gradient(135deg, rgba(26, 155, 174, 0.15) 0%, rgba(22, 199, 132, 0.15) 100%);
+  border-color: #16c784;
+}
+
+.dark-mode #aiInsightsList li {
+  background: linear-gradient(135deg, #2a3a40 0%, #1f2f35 100%);
+  border-left-color: #16c784;
+}
+
+.dark-mode .leaderboard-table tbody tr:hover {
+  background-color: rgba(26, 155, 174, 0.15);
+}
+
+/* Responsive Premium Enhancements */
+@media (max-width: 768px) {
+  #premiumBadge {
+    padding: 6px 10px !important;
+    font-size: 0.7rem;
+  }
+
+  #premiumBadge::before {
+    margin-right: 2px;
+  }
+
+  .report-sheet::before {
+    font-size: 10px;
+    padding: 4px 8px;
+    right: 10px;
+    top: 8px;
+  }
+
+  .card.premium-card {
+    margin-bottom: 15px;
+  }
+}
+
+/* Enhanced form control sizing */
+#transactionForm .form-control,
+#transactionForm .form-select {
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  height: auto;
+}

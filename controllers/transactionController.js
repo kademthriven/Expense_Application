@@ -117,7 +117,7 @@ exports.add = async (req, res) => {
 exports.getAll = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
-    const limit = 5;
+    const limit = Number(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
     const { search, view, selectedDate, selectedMonth, selectedYear } = req.query;
@@ -297,6 +297,12 @@ exports.remove = async (req, res) => {
 
 exports.exportExcel = async (req, res) => {
   try {
+    const user = await User.findByPk(req.userId);
+
+    if (!user || !user.isPremium) {
+      return res.status(403).json({ error: 'Excel export is available only for premium users' });
+    }
+
     const transactions = await Transaction.findAll({
       where: { userId: req.userId },
       include: [

@@ -71,7 +71,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Server error' });
 });
 
-sequelize.sync({force: true})
+sequelize.sync({force: false})
   .then(async () => {
     const catCount = await Category.count();
     if (catCount === 0) {

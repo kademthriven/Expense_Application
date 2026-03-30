@@ -12,14 +12,16 @@ const authConfig = {
 
 let currentPage = 1;
 let totalPages = 1;
-let pageSize = 5;
+let pageSize = 10;
 let currentChart = null;
 let editModalInstance = null;
 let premiumPurchaseModalInstance = null;
 let cancelPaymentConfirmModalInstance = null;
+let deleteTransactionModalInstance = null;
 let leaderboardLoaded = false;
 let activePremiumOrder = null;
 let currentUserIsPremium = false;
+let transactionIdToDelete = null;
 
 function getTodayLocal() {
   return new Date().toLocaleDateString('en-CA');
@@ -93,13 +95,34 @@ async function refreshPremiumUI() {
     document.getElementById('premiumBanner').classList.toggle('d-none', !isPremium);
     document.getElementById('showLeaderboardBtn').classList.toggle('d-none', !isPremium);
 
+    document.getElementById('showReportBtn').classList.toggle('d-none', !isPremium);
+
     document.getElementById('showReportBtn').disabled = !isPremium;
-    document.getElementById('downloadReportBtn').disabled = !isPremium;
+
     document.getElementById('reportPremiumNote').innerText = isPremium ? '' : 'Premium only';
+
+    // Update navbar styling for premium users
+    const navbar = document.querySelector('.navbar');
+    if (isPremium) {
+      navbar.classList.add('premium-navbar');
+    } else {
+      navbar.classList.remove('premium-navbar');
+    }
 
     if (!isPremium) {
       document.getElementById('leaderboardSection').classList.add('d-none');
-      document.getElementById('downloadReportBtn').disabled = true;
+      document.getElementById('reportSection').classList.add('d-none');
+      // Hide Excel export button for non-premium users
+      const excelBtn = document.querySelector('button[onclick="exportExcel()"]');
+      if (excelBtn) {
+        excelBtn.classList.add('d-none');
+      }
+    } else {
+      // Show Excel export button for premium users
+      const excelBtn = document.querySelector('button[onclick="exportExcel()"]');
+      if (excelBtn) {
+        excelBtn.classList.remove('d-none');
+      }
     }
   } catch (err) {
     console.log(err);
@@ -114,11 +137,25 @@ async function loadLeaderboard() {
 
     res.data.forEach((item) => {
       const tr = document.createElement('tr');
+      let rankBadgeClass = 'rank-other';
+      let rankEmoji = '🏅';
+      
+      if (item.rank === 1) {
+        rankBadgeClass = 'rank-1';
+        rankEmoji = '🥇';
+      } else if (item.rank === 2) {
+        rankBadgeClass = 'rank-2';
+        rankEmoji = '🥈';
+      } else if (item.rank === 3) {
+        rankBadgeClass = 'rank-3';
+        rankEmoji = '🥉';
+      }
+      
       tr.innerHTML = `
-        <td>${item.rank}</td>
-        <td>${item.name}</td>
+        <td><span class="rank-badge ${rankBadgeClass}">${rankEmoji} #${item.rank}</span></td>
+        <td><strong>${item.name}</strong></td>
         <td>${item.email}</td>
-        <td>₹${item.totalExpense}</td>
+        <td><strong style="color: #1a9bae;">₹${item.totalExpense}</strong></td>
       `;
       tbody.appendChild(tr);
     });
@@ -237,191 +274,47 @@ async function downloadPremiumReport() {
       return;
     }
 
-    const view = document.getElementById('reportView').value;
-    const selectedDate = document.getElementById('reportDate').value || getTodayLocal();
+    const reportSection = document.querySelector('.report-sheet');
 
-    const res = await axios.get('/reports', {
-      ...authConfig,
-      params: { view, selectedDate }
-    });
-
-    const report = res.data;
+    if (!reportSection || reportSection.classList.contains('d-none')) {
+      alert('Please generate the report first');
+      return;
+    }
 
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'mm', 'a4');
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    const primaryColor = [26, 155, 174];
-    const greenColor = [34, 139, 34];
-    const redColor = [220, 53, 69];
-    const blueColor = [13, 110, 253];
-    const darkColor = [40, 40, 40];
-    const lightBorder = [190, 190, 190];
-
-    // Header
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(19);
-    doc.setTextColor(...primaryColor);
-    doc.text('Day to Day Expenses', pageWidth / 2, 18, { align: 'center' });
-
-    doc.setFontSize(13);
-    doc.setTextColor(...darkColor);
-    doc.text(
-      view === 'monthly' ? selectedDate.slice(0, 4) : 'Premium Report',
-      pageWidth / 2,
-      27,
-      { align: 'center' }
-    );
-
-    doc.setFontSize(11);
-    doc.text(`${view.charAt(0).toUpperCase() + view.slice(1)} Report`, pageWidth / 2, 34, { align: 'center' });
-    doc.text(report.label || '', pageWidth / 2, 40, { align: 'center' });
-
-    // Transactions table
-    const transactionRows = report.transactions.map((item) => [
-      item.date,
-      item.description || '',
-      item.category || 'Other',
-      item.income ? `₹${Number(item.income).toFixed(2)}` : '',
-      item.expense ? `₹${Number(item.expense).toFixed(2)}` : ''
-    ]);
-
-    doc.autoTable({
-      startY: 48,
-      head: [['Date', 'Description', 'Category', 'Income', 'Expense']],
-      body: transactionRows.length
-        ? transactionRows
-        : [['', 'No transactions found for this report', '', '', '']],
-      theme: 'grid',
-      headStyles: {
-        fillColor: primaryColor,
-        textColor: 255,
-        halign: 'center',
-        fontStyle: 'bold',
-        fontSize: 10
-      },
-      bodyStyles: {
-        fontSize: 9,
-        textColor: darkColor
-      },
-      styles: {
-        lineColor: lightBorder,
-        lineWidth: 0.2,
-        cellPadding: 2.5
-      },
-      columnStyles: {
-        0: { cellWidth: 28 },
-        1: { cellWidth: 52 },
-        2: { cellWidth: 42 },
-        3: { halign: 'right', cellWidth: 30 },
-        4: { halign: 'right', cellWidth: 30 }
-      }
+    const canvas = await html2canvas(reportSection, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff'
     });
 
-    let y = doc.lastAutoTable.finalY + 8;
+    const imgData = canvas.toDataURL('image/png');
 
-    // Totals section
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
 
-    doc.setTextColor(...greenColor);
-    doc.text(`Income : ₹${Number(report.summary.income).toFixed(2)}`, 18, y);
+    const imgWidth = pageWidth - 10;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    doc.setTextColor(...redColor);
-    doc.text(`Expense : ₹${Number(report.summary.expense).toFixed(2)}`, 82, y);
+    let heightLeft = imgHeight;
+    let position = 5;
 
-    doc.setTextColor(...blueColor);
-    doc.text(`Savings : ₹${Number(report.summary.savings).toFixed(2)}`, 148, y);
+    pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+    heightLeft -= (pageHeight - 10);
 
-    y += 10;
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight + 5;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - 10);
+    }
 
-    // Category summary table
-    const categoryRows = report.categorySummary.map((item) => [
-      item.category,
-      `₹${Number(item.totalAmount).toFixed(2)}`
-    ]);
-
-    doc.autoTable({
-      startY: y,
-      head: [['Category', 'Total Expense']],
-      body: categoryRows.length
-        ? categoryRows
-        : [['No category summary available', '']],
-      theme: 'grid',
-      headStyles: {
-        fillColor: primaryColor,
-        textColor: 255,
-        halign: 'center',
-        fontStyle: 'bold',
-        fontSize: 10
-      },
-      bodyStyles: {
-        fontSize: 9,
-        textColor: darkColor
-      },
-      styles: {
-        lineColor: lightBorder,
-        lineWidth: 0.2,
-        cellPadding: 2.5
-      },
-      columnStyles: {
-        0: { cellWidth: 120 },
-        1: { halign: 'right', cellWidth: 55 }
-      }
-    });
-
-    y = doc.lastAutoTable.finalY + 10;
-
-    // Notes section
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...darkColor);
-    doc.text('Notes', 14, y);
-
-    const notesRows = [
-      ['1', `Report generated for ${report.label || view}`],
-      ['2', 'Income and expense values are based on filtered report data'],
-      ['3', 'Only premium users can view and download this report']
-    ];
-
-    doc.autoTable({
-      startY: y + 3,
-      head: [['No', 'Notes']],
-      body: notesRows,
-      theme: 'grid',
-      headStyles: {
-        fillColor: primaryColor,
-        textColor: 255,
-        halign: 'center',
-        fontStyle: 'bold',
-        fontSize: 10
-      },
-      bodyStyles: {
-        fontSize: 9,
-        textColor: darkColor
-      },
-      styles: {
-        lineColor: lightBorder,
-        lineWidth: 0.2,
-        cellPadding: 2.5
-      },
-      columnStyles: {
-        0: { cellWidth: 20, halign: 'center' },
-        1: { cellWidth: 155 }
-      }
-    });
-
-    // Footer
-    const footerY = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
-    doc.text('Generated by Expense Tracker Premium', pageWidth / 2, footerY, { align: 'center' });
-
-    doc.save(`premium-report-${view}-${report.label || 'report'}.pdf`);
+    pdf.save('premium-report.pdf');
   } catch (err) {
-    console.error('downloadPremiumReport error:', err.response?.data || err.message);
-    alert(err.response?.data?.error || 'Failed to download PDF report');
+    console.error('downloadPremiumReport error:', err);
+    alert('Failed to download PDF report');
   }
 }
 
@@ -451,11 +344,14 @@ async function suggestCategoryAI() {
   try {
     const description = document.getElementById('description').value;
     const type = document.getElementById('type').value;
+    const hintElement = document.getElementById('aiCategoryHint');
 
     if (!description.trim()) {
-      alert('Please enter a description first');
+      hintElement.innerHTML = '<span class="ai-error">⚠️ Please enter a description first</span>';
       return;
     }
+
+    hintElement.innerHTML = '<span class="ai-loading">⏳ AI is analyzing...</span>';
 
     const res = await axios.post(
       '/ai/suggest-category',
@@ -464,8 +360,7 @@ async function suggestCategoryAI() {
     );
 
     document.getElementById('category').value = res.data.categoryId;
-    document.getElementById('aiCategoryHint').innerText =
-      `AI suggested category: ${res.data.categoryName}`;
+    hintElement.innerHTML = `<span class="ai-success">✅ AI suggested: <strong>${res.data.categoryName}</strong></span>`;
   } catch (err) {
     document.getElementById('aiCategoryHint').innerText = '';
     alert(err.response?.data?.error || 'AI category suggestion failed');
@@ -503,6 +398,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   editModalInstance = new bootstrap.Modal(document.getElementById('editTransactionModal'));
   premiumPurchaseModalInstance = new bootstrap.Modal(document.getElementById('premiumPurchaseModal'));
   cancelPaymentConfirmModalInstance = new bootstrap.Modal(document.getElementById('cancelPaymentConfirmModal'));
+  deleteTransactionModalInstance = new bootstrap.Modal(document.getElementById('deleteTransactionConfirmModal'));
 
   document.getElementById('date').value = getTodayLocal();
   document.getElementById('dailyFilter').value = getTodayLocal();
@@ -784,6 +680,18 @@ async function loadTransactions() {
   document.getElementById('pageInfo').innerText =
     `Page ${res.data.currentPage} of ${totalPages} | Total Items: ${res.data.totalItems}`;
 
+  // Update pagination button states
+  const prevBtn = document.querySelector('button[onclick="prevPage()"]');
+  const nextBtn = document.querySelector('button[onclick="nextPage()"]');
+  
+  if (prevBtn) {
+    prevBtn.disabled = res.data.currentPage === 1;
+  }
+  
+  if (nextBtn) {
+    nextBtn.disabled = res.data.currentPage >= totalPages;
+  }
+
   renderTransactions(res.data.transactions);
   renderChart(res.data.transactions);
 }
@@ -886,15 +794,23 @@ function renderChart(transactions) {
   });
 }
 
-async function deleteTransaction(id) {
+function deleteTransaction(id) {
+  transactionIdToDelete = id;
+  deleteTransactionModalInstance.show();
+}
+
+async function confirmDeleteTransaction() {
   try {
-    await axios.delete(`/transactions/${id}`, authConfig);
+    await axios.delete(`/transactions/${transactionIdToDelete}`, authConfig);
+    deleteTransactionModalInstance.hide();
     await loadSummary();
     await loadTransactions();
     leaderboardLoaded = false;
     await refreshPremiumUI();
+    transactionIdToDelete = null;
   } catch (err) {
     alert(err.response?.data?.error || 'Delete failed');
+    transactionIdToDelete = null;
   }
 }
 
@@ -921,6 +837,11 @@ function nextPage() {
 
 async function exportExcel() {
   try {
+    if (!currentUserIsPremium) {
+      alert('Excel export is available only for premium users');
+      return;
+    }
+
     const res = await axios.get('/transactions/export', {
       ...authConfig,
       responseType: 'blob'
