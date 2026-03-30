@@ -17,6 +17,11 @@ const Transaction = sequelize.define('transaction', {
   date: {
     type: DataTypes.DATEONLY,
     allowNull: false
+  },
+  note: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Short description or comment for the expense'
   }
 });
 
