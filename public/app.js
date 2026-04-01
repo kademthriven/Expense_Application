@@ -40,6 +40,7 @@ function getCurrentYearLocal() {
 
 function getFilterParams() {
   const view = document.getElementById('viewType').value;
+
   const params = {
     page: currentPage,
     limit: pageSize,
@@ -82,6 +83,93 @@ function updateFilterInputs() {
   }
 }
 
+function escapeHtml(text) {
+  return String(text ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll("'", '&#39;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function showToast(type, title, message) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `custom-toast ${type}`;
+
+  toast.innerHTML = `
+    <div class="toast-title">${escapeHtml(title)}</div>
+    <p class="toast-message">${escapeHtml(message)}</p>
+  `;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-8px)';
+    toast.style.transition = 'all 0.25s ease';
+
+    setTimeout(() => {
+      toast.remove();
+    }, 250);
+  }, 2500);
+}
+
+function showPaymentStatus() {
+  return;
+}
+
+function setButtonLoading(button, isLoading, loadingText, normalText) {
+  if (!button) return;
+
+  if (isLoading) {
+    button.dataset.originalText = normalText || button.innerHTML;
+    button.innerHTML = loadingText;
+    button.disabled = true;
+    button.classList.add('btn-loading');
+  } else {
+    button.innerHTML = normalText || button.dataset.originalText || button.innerHTML;
+    button.disabled = false;
+    button.classList.remove('btn-loading');
+  }
+}
+
+function getExcelButton() {
+  return document.querySelector('button[onclick="exportExcel()"]');
+}
+
+function handlePaymentStatusFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const paymentStatus = params.get('payment');
+  const message = params.get('message');
+
+  if (!paymentStatus) return;
+
+  if (paymentStatus === 'success') {
+    showToast(
+      'success',
+      'Payment Successful',
+      message || 'Your premium membership has been activated successfully.'
+    );
+  } else if (paymentStatus === 'failed') {
+    showToast(
+      'error',
+      'Payment Failed',
+      message || 'Your payment failed. Please try again.'
+    );
+  } else if (paymentStatus === 'pending') {
+    showToast(
+      'warning',
+      'Payment Pending',
+      message || 'Your payment is still pending.'
+    );
+  }
+
+  window.history.replaceState({}, document.title, '/index.html');
+}
+
 async function refreshPremiumUI() {
   try {
     const res = await axios.get('/premium/status', authConfig);
@@ -94,14 +182,10 @@ async function refreshPremiumUI() {
     document.getElementById('buyPremiumBtn').classList.toggle('d-none', isPremium);
     document.getElementById('premiumBanner').classList.toggle('d-none', !isPremium);
     document.getElementById('showLeaderboardBtn').classList.toggle('d-none', !isPremium);
-
     document.getElementById('showReportBtn').classList.toggle('d-none', !isPremium);
-
     document.getElementById('showReportBtn').disabled = !isPremium;
-
     document.getElementById('reportPremiumNote').innerText = isPremium ? '' : 'Premium only';
 
-    // Update navbar styling for premium users
     const navbar = document.querySelector('.navbar');
     if (isPremium) {
       navbar.classList.add('premium-navbar');
@@ -109,17 +193,16 @@ async function refreshPremiumUI() {
       navbar.classList.remove('premium-navbar');
     }
 
+    const excelBtn = getExcelButton();
+
     if (!isPremium) {
       document.getElementById('leaderboardSection').classList.add('d-none');
       document.getElementById('reportSection').classList.add('d-none');
-      // Hide Excel export button for non-premium users
-      const excelBtn = document.querySelector('button[onclick="exportExcel()"]');
+
       if (excelBtn) {
         excelBtn.classList.add('d-none');
       }
     } else {
-      // Show Excel export button for premium users
-      const excelBtn = document.querySelector('button[onclick="exportExcel()"]');
       if (excelBtn) {
         excelBtn.classList.remove('d-none');
       }
@@ -139,7 +222,7 @@ async function loadLeaderboard() {
       const tr = document.createElement('tr');
       let rankBadgeClass = 'rank-other';
       let rankEmoji = '🏅';
-      
+
       if (item.rank === 1) {
         rankBadgeClass = 'rank-1';
         rankEmoji = '🥇';
@@ -150,25 +233,26 @@ async function loadLeaderboard() {
         rankBadgeClass = 'rank-3';
         rankEmoji = '🥉';
       }
-      
+
       tr.innerHTML = `
-        <td><span class="rank-badge ${rankBadgeClass}">${rankEmoji} #${item.rank}</span></td>
-        <td><strong>${item.name}</strong></td>
-        <td>${item.email}</td>
-        <td><strong style="color: #1a9bae;">₹${item.totalExpense}</strong></td>
+        <td><span class="rank-badge ${rankBadgeClass}">${rankEmoji} #${escapeHtml(String(item.rank))}</span></td>
+        <td><strong>${escapeHtml(item.name || '')}</strong></td>
+        <td>${escapeHtml(item.email || '')}</td>
+        <td><strong style="color: #1a9bae;">₹${escapeHtml(String(item.totalExpense ?? 0))}</strong></td>
       `;
+
       tbody.appendChild(tr);
     });
 
     leaderboardLoaded = true;
   } catch (err) {
-    alert(err.response?.data?.error || 'Failed to load leaderboard');
+    showToast('error', 'Leaderboard Failed', err.response?.data?.error || 'Failed to load leaderboard.');
   }
 }
 
 async function toggleLeaderboard() {
   if (!currentUserIsPremium) {
-    alert('Leaderboard is available only for premium users');
+    showToast('warning', 'Premium Only', 'Leaderboard is available only for premium users.');
     return;
   }
 
@@ -187,7 +271,7 @@ async function toggleLeaderboard() {
 
 function toggleReportSection() {
   if (!currentUserIsPremium) {
-    alert('Report generation is available only for premium users');
+    showToast('warning', 'Premium Only', 'Report generation is available only for premium users.');
     return;
   }
 
@@ -195,11 +279,15 @@ function toggleReportSection() {
 }
 
 async function generatePremiumReport() {
+  const reportButton = document.querySelector('button[onclick="generatePremiumReport()"]');
+
   try {
     if (!currentUserIsPremium) {
-      alert('Report generation is available only for premium users');
+      showToast('warning', 'Premium Only', 'Report generation is available only for premium users.');
       return;
     }
+
+    setButtonLoading(reportButton, true, 'Loading...', 'View Report');
 
     const view = document.getElementById('reportView').value;
     const selectedDate = document.getElementById('reportDate').value || getTodayLocal();
@@ -213,7 +301,6 @@ async function generatePremiumReport() {
       view === 'monthly' ? selectedDate.slice(0, 4) : 'Premium Report';
 
     document.getElementById('reportSubLabel').innerText = `${view.toUpperCase()} • ${res.data.label}`;
-
     document.getElementById('reportTotalIncome').innerText = `₹${res.data.summary.income}`;
     document.getElementById('reportTotalExpense').innerText = `₹${res.data.summary.expense}`;
     document.getElementById('reportSavings').innerText = `₹${res.data.summary.savings}`;
@@ -231,11 +318,11 @@ async function generatePremiumReport() {
       res.data.transactions.forEach((item) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${item.date}</td>
-          <td>${item.description || ''}</td>
-          <td>${item.category}</td>
-          <td>${item.income ? `₹${item.income}` : ''}</td>
-          <td>${item.expense ? `₹${item.expense}` : ''}</td>
+          <td>${escapeHtml(item.date || '')}</td>
+          <td>${escapeHtml(item.description || '')}</td>
+          <td>${escapeHtml(item.category || '')}</td>
+          <td>${item.income ? `₹${escapeHtml(String(item.income))}` : ''}</td>
+          <td>${item.expense ? `₹${escapeHtml(String(item.expense))}` : ''}</td>
         `;
         transactionBody.appendChild(tr);
       });
@@ -254,35 +341,41 @@ async function generatePremiumReport() {
       res.data.categorySummary.forEach((item) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${item.category}</td>
-          <td>₹${item.totalAmount}</td>
+          <td>${escapeHtml(item.category || '')}</td>
+          <td>₹${escapeHtml(String(item.totalAmount ?? 0))}</td>
         `;
         categoryBody.appendChild(tr);
       });
     }
 
     document.getElementById('downloadReportBtn').disabled = false;
+    showToast('success', 'Report Ready', 'Premium report generated successfully.');
   } catch (err) {
-    alert(err.response?.data?.error || 'Failed to generate report');
+    showToast('error', 'Report Failed', err.response?.data?.error || 'Failed to generate report.');
+  } finally {
+    setButtonLoading(reportButton, false, 'Loading...', 'View Report');
   }
 }
 
 async function downloadPremiumReport() {
+  const downloadBtn = document.getElementById('downloadReportBtn');
+
   try {
     if (!currentUserIsPremium) {
-      alert('Download is available only for premium users');
+      showToast('warning', 'Premium Only', 'Download is available only for premium users.');
       return;
     }
 
     const reportSection = document.querySelector('.report-sheet');
 
-    if (!reportSection || reportSection.classList.contains('d-none')) {
-      alert('Please generate the report first');
+    if (!reportSection) {
+      showToast('warning', 'No Report', 'Please generate the report first.');
       return;
     }
 
-    const { jsPDF } = window.jspdf;
+    setButtonLoading(downloadBtn, true, 'Downloading...', '📥 Download PDF');
 
+    const { jsPDF } = window.jspdf;
     const canvas = await html2canvas(reportSection, {
       scale: 2,
       useCORS: true,
@@ -302,24 +395,31 @@ async function downloadPremiumReport() {
     let position = 5;
 
     pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
-    heightLeft -= (pageHeight - 10);
+    heightLeft -= pageHeight - 10;
 
     while (heightLeft > 0) {
       position = heightLeft - imgHeight + 5;
       pdf.addPage();
       pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
-      heightLeft -= (pageHeight - 10);
+      heightLeft -= pageHeight - 10;
     }
 
     pdf.save('premium-report.pdf');
+    showToast('success', 'Downloaded', 'PDF report downloaded successfully.');
   } catch (err) {
     console.error('downloadPremiumReport error:', err);
-    alert('Failed to download PDF report');
+    showToast('error', 'Download Failed', 'Failed to download PDF report.');
+  } finally {
+    setButtonLoading(downloadBtn, false, 'Downloading...', '📥 Download PDF');
   }
 }
 
 async function loadAIInsights() {
+  const aiButton = document.querySelector('button[onclick="loadAIInsights()"]');
+
   try {
+    setButtonLoading(aiButton, true, 'Loading...', '✨ AI Insights');
+
     const res = await axios.get('/ai/insights', authConfig);
     const section = document.getElementById('aiInsightsSection');
     const title = document.getElementById('aiInsightsTitle');
@@ -335,8 +435,11 @@ async function loadAIInsights() {
     });
 
     section.classList.remove('d-none');
+    showToast('success', 'AI Insights', 'AI insights loaded successfully.');
   } catch (err) {
-    alert(err.response?.data?.error || 'Unable to load AI insights');
+    showToast('error', 'AI Failed', err.response?.data?.error || 'Unable to load AI insights');
+  } finally {
+    setButtonLoading(aiButton, false, 'Loading...', '✨ AI Insights');
   }
 }
 
@@ -360,10 +463,10 @@ async function suggestCategoryAI() {
     );
 
     document.getElementById('category').value = res.data.categoryId;
-    hintElement.innerHTML = `<span class="ai-success">✅ AI suggested: <strong>${res.data.categoryName}</strong></span>`;
+    hintElement.innerHTML = `<span class="ai-success">✅ AI suggested: <strong>${escapeHtml(res.data.categoryName)}</strong></span>`;
   } catch (err) {
     document.getElementById('aiCategoryHint').innerText = '';
-    alert(err.response?.data?.error || 'AI category suggestion failed');
+    showToast('error', 'AI Failed', err.response?.data?.error || 'AI category suggestion failed');
   }
 }
 
@@ -377,23 +480,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('dark-mode');
   }
 
-  const params = new URLSearchParams(window.location.search);
-  const paymentStatus = params.get('payment');
-
-  if (paymentStatus === 'success') {
-    alert('Transaction successful');
-    window.history.replaceState({}, document.title, '/index.html');
-  }
-
-  if (paymentStatus === 'failed') {
-    alert('TRANSACTION FAILED');
-    window.history.replaceState({}, document.title, '/index.html');
-  }
-
-  if (paymentStatus === 'pending') {
-    alert('Payment is still pending');
-    window.history.replaceState({}, document.title, '/index.html');
-  }
+  handlePaymentStatusFromURL();
 
   editModalInstance = new bootstrap.Modal(document.getElementById('editTransactionModal'));
   premiumPurchaseModalInstance = new bootstrap.Modal(document.getElementById('premiumPurchaseModal'));
@@ -442,7 +529,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 document.getElementById('transactionForm').addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+
   try {
+    setButtonLoading(submitBtn, true, 'Saving...', 'Add Transaction');
+
     await axios.post(
       '/transactions',
       {
@@ -465,8 +556,12 @@ document.getElementById('transactionForm').addEventListener('submit', async (e) 
     await loadTransactions();
     leaderboardLoaded = false;
     await refreshPremiumUI();
+
+    showToast('success', 'Added', 'Transaction added successfully.');
   } catch (err) {
-    alert(err.response?.data?.error || 'Failed to add transaction');
+    showToast('error', 'Add Failed', err.response?.data?.error || 'Failed to add transaction');
+  } finally {
+    setButtonLoading(submitBtn, false, 'Saving...', 'Add Transaction');
   }
 });
 
@@ -474,8 +569,11 @@ document.getElementById('editTransactionForm').addEventListener('submit', async 
   e.preventDefault();
 
   const id = document.getElementById('editId').value;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
 
   try {
+    setButtonLoading(submitBtn, true, 'Updating...', 'Update Transaction');
+
     await axios.put(
       `/transactions/${id}`,
       {
@@ -494,8 +592,12 @@ document.getElementById('editTransactionForm').addEventListener('submit', async 
     await loadTransactions();
     leaderboardLoaded = false;
     await refreshPremiumUI();
+
+    showToast('success', 'Updated', 'Transaction updated successfully.');
   } catch (err) {
-    alert(err.response?.data?.error || 'Update failed');
+    showToast('error', 'Update Failed', err.response?.data?.error || 'Update failed');
+  } finally {
+    setButtonLoading(submitBtn, false, 'Updating...', 'Update Transaction');
   }
 });
 
@@ -526,7 +628,10 @@ async function launchCashfreeCheckout(orderData) {
 }
 
 async function buyPremiumMembership() {
+  const proceedBtn = document.getElementById('proceedPremiumPaymentBtn');
+
   try {
+    setButtonLoading(proceedBtn, true, 'Processing...', 'Proceed to Pay');
     premiumPurchaseModalInstance.hide();
 
     const response = await axios.post('/premium/create-order', {}, authConfig);
@@ -539,7 +644,9 @@ async function buyPremiumMembership() {
 
     await launchCashfreeCheckout(activePremiumOrder);
   } catch (err) {
-    alert(err.response?.data?.error || 'Failed to start premium payment');
+    showToast('error', 'Payment Failed', err.response?.data?.error || 'Failed to start premium payment');
+  } finally {
+    setButtonLoading(proceedBtn, false, 'Processing...', 'Proceed to Pay');
   }
 }
 
@@ -547,7 +654,7 @@ async function resumePremiumPayment() {
   cancelPaymentConfirmModalInstance.hide();
 
   if (!activePremiumOrder) {
-    alert('No active payment found');
+    showToast('warning', 'No Active Payment', 'No active payment found');
     return;
   }
 
@@ -558,7 +665,7 @@ async function confirmCancelPayment() {
   try {
     if (!activePremiumOrder) {
       cancelPaymentConfirmModalInstance.hide();
-      alert('Payment cancelled');
+      showToast('warning', 'Cancelled', 'Payment cancelled');
       return;
     }
 
@@ -569,10 +676,10 @@ async function confirmCancelPayment() {
     );
 
     cancelPaymentConfirmModalInstance.hide();
-    alert('Payment cancelled');
+    showToast('warning', 'Payment Cancelled', 'Your premium payment was cancelled.');
     activePremiumOrder = null;
   } catch (err) {
-    alert(err.response?.data?.error || 'Unable to cancel payment');
+    showToast('error', 'Cancel Failed', err.response?.data?.error || 'Unable to cancel payment');
   }
 }
 
@@ -583,26 +690,26 @@ async function checkPremiumOrderAndShowMessage(orderId) {
     if (verifyRes.data.status === 'SUCCESSFUL') {
       leaderboardLoaded = false;
       await refreshPremiumUI();
-      alert('Transaction successful');
+      showToast('success', 'Payment Successful', 'Premium membership activated.');
       activePremiumOrder = null;
       return;
     }
 
     if (verifyRes.data.status === 'FAILED') {
-      alert('TRANSACTION FAILED');
+      showToast('error', 'Payment Failed', 'Premium payment failed.');
       activePremiumOrder = null;
       return;
     }
 
     if (verifyRes.data.status === 'CANCELLED') {
-      alert('Payment cancelled');
+      showToast('warning', 'Payment Cancelled', 'Premium payment was cancelled.');
       activePremiumOrder = null;
       return;
     }
 
-    alert('Payment is pending. Please check again in a moment.');
+    showToast('warning', 'Payment Pending', 'Your payment is still pending.');
   } catch (err) {
-    alert('Unable to verify payment status');
+    showToast('error', 'Verification Failed', 'Unable to verify payment status');
   }
 }
 
@@ -680,14 +787,13 @@ async function loadTransactions() {
   document.getElementById('pageInfo').innerText =
     `Page ${res.data.currentPage} of ${totalPages} | Total Items: ${res.data.totalItems}`;
 
-  // Update pagination button states
   const prevBtn = document.querySelector('button[onclick="prevPage()"]');
   const nextBtn = document.querySelector('button[onclick="nextPage()"]');
-  
+
   if (prevBtn) {
     prevBtn.disabled = res.data.currentPage === 1;
   }
-  
+
   if (nextBtn) {
     nextBtn.disabled = res.data.currentPage >= totalPages;
   }
@@ -700,29 +806,73 @@ function renderTransactions(transactions) {
   const tbody = document.getElementById('transactionTableBody');
   tbody.innerHTML = '';
 
+  if (!transactions || transactions.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center text-muted py-4">No transactions found</td>
+      </tr>
+    `;
+    return;
+  }
+
   transactions.forEach((item) => {
     const tr = document.createElement('tr');
 
-    tr.innerHTML = `
-      <td>₹${item.amount}</td>
-      <td>
-        <span class="badge ${item.type === 'income' ? 'bg-success' : 'bg-danger'}">
-          ${item.type}
-        </span>
-      </td>
-      <td>${item.description || ''}</td>
-      <td>${item.date}</td>
-      <td>${item.category ? item.category.name : ''}</td>
-      <td>${item.account ? item.account.name : ''}</td>
-      <td>
-        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditModal(${item.id}, '${item.amount}', '${item.type}', '${escapeHtml(item.description || '')}', '${item.date}', '${item.category ? item.category.id : ''}', '${item.account ? item.account.id : ''}')">
-          Edit
-        </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${item.id})">
-          Delete
-        </button>
-      </td>
-    `;
+    const amountTd = document.createElement('td');
+    amountTd.textContent = `₹${item.amount}`;
+
+    const typeTd = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = `badge ${item.type === 'income' ? 'bg-success' : 'bg-danger'}`;
+    badge.textContent = item.type;
+    typeTd.appendChild(badge);
+
+    const descriptionTd = document.createElement('td');
+    descriptionTd.textContent = item.description || '';
+
+    const dateTd = document.createElement('td');
+    dateTd.textContent = item.date || '';
+
+    const categoryTd = document.createElement('td');
+    categoryTd.textContent = item.category ? item.category.name : '';
+
+    const accountTd = document.createElement('td');
+    accountTd.textContent = item.account ? item.account.name : '';
+
+    const actionTd = document.createElement('td');
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-sm btn-outline-primary me-1';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => {
+      openEditModal(
+        item.id,
+        item.amount,
+        item.type,
+        item.description || '',
+        item.date,
+        item.category ? item.category.id : '',
+        item.account ? item.account.id : ''
+      );
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-sm btn-outline-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => {
+      deleteTransaction(item.id);
+    });
+
+    actionTd.appendChild(editBtn);
+    actionTd.appendChild(deleteBtn);
+
+    tr.appendChild(amountTd);
+    tr.appendChild(typeTd);
+    tr.appendChild(descriptionTd);
+    tr.appendChild(dateTd);
+    tr.appendChild(categoryTd);
+    tr.appendChild(accountTd);
+    tr.appendChild(actionTd);
 
     tbody.appendChild(tr);
   });
@@ -732,7 +882,7 @@ function openEditModal(id, amount, type, description, date, categoryId, accountI
   document.getElementById('editId').value = id;
   document.getElementById('editAmount').value = amount;
   document.getElementById('editType').value = type;
-  document.getElementById('editDescription').value = decodeHtml(description);
+  document.getElementById('editDescription').value = description || '';
   document.getElementById('editDate').value = date ? date.split('T')[0] : '';
   document.getElementById('editCategory').value = categoryId;
   document.getElementById('editAccount').value = accountId;
@@ -808,8 +958,10 @@ async function confirmDeleteTransaction() {
     leaderboardLoaded = false;
     await refreshPremiumUI();
     transactionIdToDelete = null;
+
+    showToast('success', 'Deleted', 'Transaction deleted successfully.');
   } catch (err) {
-    alert(err.response?.data?.error || 'Delete failed');
+    showToast('error', 'Delete Failed', err.response?.data?.error || 'Delete failed.');
     transactionIdToDelete = null;
   }
 }
@@ -836,11 +988,15 @@ function nextPage() {
 }
 
 async function exportExcel() {
+  const excelBtn = getExcelButton();
+
   try {
     if (!currentUserIsPremium) {
-      alert('Excel export is available only for premium users');
+      showToast('warning', 'Premium Only', 'Excel export is available only for premium users.');
       return;
     }
+
+    setButtonLoading(excelBtn, true, 'Exporting...', 'Excel');
 
     const res = await axios.get('/transactions/export', {
       ...authConfig,
@@ -854,8 +1010,12 @@ async function exportExcel() {
     document.body.appendChild(a);
     a.click();
     a.remove();
+
+    showToast('success', 'Exported', 'Excel file downloaded successfully.');
   } catch (err) {
-    alert('Export failed');
+    showToast('error', 'Export Failed', 'Failed to export Excel file.');
+  } finally {
+    setButtonLoading(excelBtn, false, 'Exporting...', 'Excel');
   }
 }
 
@@ -872,19 +1032,4 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('isPremium');
   window.location.href = 'login.html';
-}
-
-function escapeHtml(text) {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll("'", '&#39;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
-
-function decodeHtml(text) {
-  const txt = document.createElement('textarea');
-  txt.innerHTML = text;
-  return txt.value;
 }
