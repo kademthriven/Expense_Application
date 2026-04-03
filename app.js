@@ -15,6 +15,7 @@ const Category = require('./models/category');
 const Account = require('./models/account');
 const Order = require('./models/order');
 const ForgotPasswordRequest = require('./models/forgotPasswordRequest');
+const FileDownload = require('./models/fileDownload');
 
 // Routes
 const userRoutes = require('./routes/userRoutes');
@@ -69,6 +70,9 @@ Order.belongsTo(User);
 
 User.hasMany(ForgotPasswordRequest);
 ForgotPasswordRequest.belongsTo(User);
+
+User.hasMany(FileDownload);
+FileDownload.belongsTo(User);
 
 // Routes
 app.use('/users', userRoutes);

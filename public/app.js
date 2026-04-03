@@ -22,6 +22,7 @@ let leaderboardLoaded = false;
 let activePremiumOrder = null;
 let currentUserIsPremium = false;
 let transactionIdToDelete = null;
+let downloadHistoryLoaded = false;
 
 function getTodayLocal() {
   return new Date().toLocaleDateString('en-CA');
@@ -140,6 +141,10 @@ function getExcelButton() {
   return document.querySelector('button[onclick="exportExcel()"]');
 }
 
+function getDownloadHistoryToggleButton() {
+  return document.querySelector('button[onclick="toggleDownloadHistory()"]') || document.getElementById('toggleHistoryBtn');
+}
+
 function handlePaymentStatusFromURL() {
   const params = new URLSearchParams(window.location.search);
   const paymentStatus = params.get('payment');
@@ -184,28 +189,30 @@ async function refreshPremiumUI() {
     document.getElementById('showLeaderboardBtn').classList.toggle('d-none', !isPremium);
     document.getElementById('showReportBtn').classList.toggle('d-none', !isPremium);
     document.getElementById('showReportBtn').disabled = !isPremium;
-    document.getElementById('reportPremiumNote').innerText = isPremium ? '' : 'Premium only';
+    const premiumNote = document.getElementById('reportPremiumNote');
+    if (premiumNote) {
+      premiumNote.innerText = isPremium ? '' : 'Premium only';
+    }
 
     const navbar = document.querySelector('.navbar');
-    if (isPremium) {
-      navbar.classList.add('premium-navbar');
-    } else {
-      navbar.classList.remove('premium-navbar');
+    if (navbar) {
+      navbar.classList.toggle('premium-navbar', isPremium);
     }
 
     const excelBtn = getExcelButton();
+    const historyBtn = document.getElementById('toggleHistoryBtn');
+    const historySection = document.getElementById('downloadHistorySection');
 
     if (!isPremium) {
       document.getElementById('leaderboardSection').classList.add('d-none');
       document.getElementById('reportSection').classList.add('d-none');
 
-      if (excelBtn) {
-        excelBtn.classList.add('d-none');
-      }
+      if (historySection) historySection.classList.add('d-none');
+      if (historyBtn) historyBtn.classList.add('d-none');
+      if (excelBtn) excelBtn.classList.add('d-none');
     } else {
-      if (excelBtn) {
-        excelBtn.classList.remove('d-none');
-      }
+      if (historyBtn) historyBtn.classList.remove('d-none');
+      if (excelBtn) excelBtn.classList.remove('d-none');
     }
   } catch (err) {
     console.log(err);
@@ -275,7 +282,33 @@ function toggleReportSection() {
     return;
   }
 
-  document.getElementById('reportSection').classList.toggle('d-none');
+  const reportSection = document.getElementById('reportSection');
+  if (!reportSection) return;
+
+  reportSection.classList.toggle('d-none');
+}
+
+async function toggleDownloadHistory() {
+  if (!currentUserIsPremium) {
+    showToast('warning', 'Premium Only', 'Download history is available only for premium users.');
+    return;
+  }
+
+  const historySection = document.getElementById('downloadHistorySection');
+  const historyBtn = document.getElementById('toggleHistoryBtn');
+
+  if (!historySection) return;
+
+  const isHidden = historySection.classList.contains('d-none');
+
+  if (isHidden) {
+    historySection.classList.remove('d-none');
+    if (historyBtn) historyBtn.innerText = 'Hide Download History';
+    await loadDownloadHistory();
+  } else {
+    historySection.classList.add('d-none');
+    if (historyBtn) historyBtn.innerText = 'Download History';
+  }
 }
 
 async function generatePremiumReport() {
@@ -366,51 +399,293 @@ async function downloadPremiumReport() {
       return;
     }
 
-    const reportSection = document.querySelector('.report-sheet');
+    const reportSheet =
+      document.querySelector('.report-card') ||
+      document.querySelector('.report-sheet') ||
+      document.getElementById('reportSection');
 
-    if (!reportSection) {
-      showToast('warning', 'No Report', 'Please generate the report first.');
+    if (!reportSheet) {
+      showToast('error', 'Report Missing', 'Please generate the report first.');
       return;
     }
 
-    setButtonLoading(downloadBtn, true, 'Downloading...', '📥 Download PDF');
+    const reportView = document.getElementById('reportView')?.value || 'monthly';
+    const reportDate = document.getElementById('reportDate')?.value || getTodayLocal();
 
-    const { jsPDF } = window.jspdf;
-    const canvas = await html2canvas(reportSection, {
+    setButtonLoading(downloadBtn, true, 'Generating PDF...', '📄 Download');
+
+    const cloneWrapper = document.createElement('div');
+    cloneWrapper.style.position = 'fixed';
+    cloneWrapper.style.left = '-99999px';
+    cloneWrapper.style.top = '0';
+    cloneWrapper.style.width = '1200px';
+    cloneWrapper.style.background = '#ffffff';
+    cloneWrapper.style.padding = '24px';
+    cloneWrapper.style.zIndex = '-1';
+
+    const clone = reportSheet.cloneNode(true);
+    clone.style.background = '#ffffff';
+    clone.style.boxShadow = 'none';
+    clone.style.borderRadius = '0';
+    clone.style.margin = '0';
+
+    cloneWrapper.appendChild(clone);
+    document.body.appendChild(cloneWrapper);
+
+    const canvas = await html2canvas(clone, {
       scale: 2,
       useCORS: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      scrollX: 0,
+      scrollY: 0
     });
 
+    document.body.removeChild(cloneWrapper);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    const pdfWidth = 210;
+    const pdfHeight = 297;
+    const margin = 8;
+    const usableWidth = pdfWidth - margin * 2;
+
+    const imgWidth = usableWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
     const imgData = canvas.toDataURL('image/png');
 
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    const imgWidth = pageWidth - 10;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
     let heightLeft = imgHeight;
-    let position = 5;
+    let position = margin;
 
-    pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight - 10;
+    pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+    heightLeft -= (pdfHeight - margin * 2);
 
     while (heightLeft > 0) {
-      position = heightLeft - imgHeight + 5;
       pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight - 10;
+      position = margin - (imgHeight - heightLeft);
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - margin * 2);
     }
 
-    pdf.save('premium-report.pdf');
-    showToast('success', 'Downloaded', 'PDF report downloaded successfully.');
+    const pdfBlob = pdf.output('blob');
+
+    const response = await fetch(
+      `/reports/upload-rendered-pdf?view=${encodeURIComponent(reportView)}&selectedDate=${encodeURIComponent(reportDate)}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/pdf'
+        },
+        body: pdfBlob
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to upload PDF');
+    }
+
+    showDownloadModal(data);
+    downloadHistoryLoaded = false;
+    await loadDownloadHistory();
+    showToast('success', 'PDF Ready', 'Your PDF report is ready.');
   } catch (err) {
     console.error('downloadPremiumReport error:', err);
-    showToast('error', 'Download Failed', 'Failed to download PDF report.');
+    showToast('error', 'Download Failed', err.message || 'Failed to generate PDF.');
   } finally {
-    setButtonLoading(downloadBtn, false, 'Downloading...', '📥 Download PDF');
+    setButtonLoading(downloadBtn, false, 'Generating PDF...', '📄 Download');
+  }
+}
+
+function showDownloadModal(data) {
+  const modalHTML = `
+    <div class="modal fade" id="downloadModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title">PDF Report Ready</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body pt-2">
+            <div class="p-4 rounded-4" style="background:#e8f5ee;">
+              <h4 class="mb-2 fw-bold">${escapeHtml(data.fileName || 'report.pdf')}</h4>
+              <p class="mb-1">${escapeHtml((data.reportType || 'monthly').toUpperCase())} report • ${escapeHtml(data.reportLabel || '')}</p>
+              <p class="text-muted mb-0">Link expires in ${escapeHtml(data.expiresIn || '7 days')}</p>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-success" onclick="window.open('${data.downloadUrl}', '_blank')">
+              Open PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const existingModal = document.getElementById('downloadModal');
+  if (existingModal) existingModal.remove();
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  const modalEl = document.getElementById('downloadModal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+
+  modalEl.addEventListener('hidden.bs.modal', function () {
+    this.remove();
+  });
+}
+
+function showExcelDownloadModal(data) {
+  const modalHTML = `
+    <div class="modal fade" id="excelDownloadModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title">Excel Report Ready</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body pt-2">
+            <div class="p-4 rounded-4" style="background:#eef6ff;">
+              <h4 class="mb-2 fw-bold">${escapeHtml(data.fileName || 'report.xlsx')}</h4>
+              <p class="mb-1">${escapeHtml((data.reportType || 'monthly').toUpperCase())} report • ${escapeHtml(data.reportLabel || '')}</p>
+              <p class="text-muted mb-0">Link expires in ${escapeHtml(data.expiresIn || '7 days')}</p>
+            </div>
+            <p class="small text-muted mt-3 mb-0">
+              Excel files may open in Excel or download automatically depending on your browser.
+            </p>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-success" onclick="window.open('${data.downloadUrl}', '_blank')">
+              Open Excel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const existingModal = document.getElementById('excelDownloadModal');
+  if (existingModal) existingModal.remove();
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  const modalEl = document.getElementById('excelDownloadModal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+
+  modalEl.addEventListener('hidden.bs.modal', function () {
+    this.remove();
+  });
+}
+
+function copyDownloadUrl() {
+  const field = document.getElementById('downloadUrlField');
+
+  if (!field) {
+    return;
+  }
+
+  field.select();
+  field.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(field.value)
+    .then(() => showToast('success', 'Copied', 'S3 URL copied to clipboard.'))
+    .catch(() => showToast('error', 'Copy Failed', 'Could not copy the S3 URL.'));
+}
+
+async function loadDownloadHistory() {
+  try {
+    const res = await axios.get('/reports/history', authConfig);
+
+    if (res.data.success) {
+      displayDownloadHistory(res.data.downloads);
+      downloadHistoryLoaded = true;
+    }
+  } catch (err) {
+    if (err.response?.status !== 401) {
+      console.error('Error loading download history:', err);
+    }
+  }
+}
+
+function displayDownloadHistory(downloads) {
+  const historyContainer = document.getElementById('downloadHistoryContainer');
+
+  if (!historyContainer) return;
+
+  if (!downloads || downloads.length === 0) {
+    historyContainer.innerHTML = `
+      <div class="alert alert-info">
+        No files downloaded yet. Generate your first report to see it here!
+      </div>
+    `;
+    return;
+  }
+
+  let historyHTML = `
+    <div class="table-responsive">
+      <table class="table table-hover table-sm">
+        <thead class="table-light">
+          <tr>
+            <th>File Name</th>
+            <th>Type</th>
+            <th>Period</th>
+            <th>Downloaded</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  downloads.forEach((download) => {
+    const downloadDate = new Date(download.downloadDate).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const fileName = download.fileName || '';
+    const lowerFileName = fileName.toLowerCase();
+    const isPdf = lowerFileName.endsWith('.pdf');
+    const actionLabel = isPdf ? 'Open PDF' : 'Open Excel';
+
+    historyHTML += `
+      <tr>
+        <td><small>${escapeHtml(fileName)}</small></td>
+        <td><span class="badge bg-primary">${escapeHtml((download.reportType || '').toUpperCase())}</span></td>
+        <td><small>${escapeHtml(download.reportLabel || '')}</small></td>
+        <td><small>${escapeHtml(downloadDate)}</small></td>
+        <td>
+          <a href="${download.downloadUrl}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
+            ${actionLabel}
+          </a>
+        </td>
+      </tr>
+    `;
+  });
+
+  historyHTML += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  historyContainer.innerHTML = historyHTML;
+}
+
+/**
+ * Initialize download history when page loads
+ */
+async function initDownloadHistory() {
+  if (currentUserIsPremium) {
+    await loadDownloadHistory();
   }
 }
 
@@ -494,6 +769,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('yearFilter').value = getCurrentYearLocal();
 
   updateFilterInputs();
+
+  const historyToggleBtn = getDownloadHistoryToggleButton();
+  if (historyToggleBtn) {
+    historyToggleBtn.innerText = 'Download History';
+  }
+
+  const historySection = document.getElementById('downloadHistorySection');
+  if (historySection) {
+    historySection.classList.add('d-none');
+  }
 
   document.getElementById('pageSize').addEventListener('change', () => {
     pageSize = Number(document.getElementById('pageSize').value);
@@ -996,26 +1281,35 @@ async function exportExcel() {
       return;
     }
 
-    setButtonLoading(excelBtn, true, 'Exporting...', 'Excel');
+    const reportView = document.getElementById('reportView')?.value || 'monthly';
+    const reportDate = document.getElementById('reportDate')?.value || getTodayLocal();
 
-    const res = await axios.get('/transactions/export', {
+    setButtonLoading(excelBtn, true, 'Generating Excel...', 'Excel');
+
+    const res = await axios.get('/reports/download', {
       ...authConfig,
-      responseType: 'blob'
+      params: {
+        view: reportView,
+        selectedDate: reportDate
+      }
     });
 
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'transactions.xlsx';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    if (!res.data || !res.data.downloadUrl) {
+      throw new Error('Excel report URL not received');
+    }
 
-    showToast('success', 'Exported', 'Excel file downloaded successfully.');
+    showExcelDownloadModal(res.data);
+    downloadHistoryLoaded = false;
+    await loadDownloadHistory();
+    showToast('success', 'Excel Ready', 'Excel report is ready.');
   } catch (err) {
-    showToast('error', 'Export Failed', 'Failed to export Excel file.');
+    showToast(
+      'error',
+      'Export Failed',
+      err.response?.data?.error || err.message || 'Failed to export Excel file.'
+    );
   } finally {
-    setButtonLoading(excelBtn, false, 'Exporting...', 'Excel');
+    setButtonLoading(excelBtn, false, 'Generating Excel...', 'Excel');
   }
 }
 

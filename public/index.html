@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="dashboard-page">
-  <!-- Floating Toast Container -->
   <div id="toastContainer" class="toast-container-custom"></div>
 
   <nav class="navbar navbar-dark bg-dark shadow-sm">
@@ -64,8 +63,11 @@
   </nav>
 
   <div class="container py-4">
-    <!-- Keep this banner -->
-    <div id="premiumBanner" class="alert alert-warning text-center fw-bold shadow-sm d-none rounded-4" role="alert">
+    <div
+      id="premiumBanner"
+      class="alert alert-warning text-center fw-bold shadow-sm d-none rounded-4"
+      role="alert"
+    >
       You are a premium user now
     </div>
 
@@ -94,23 +96,36 @@
           </div>
 
           <div class="col-md-2">
-            <button class="btn btn-primary w-100 rounded-3" onclick="generatePremiumReport()">
+            <button
+              type="button"
+              class="btn btn-primary w-100 rounded-3"
+              onclick="generatePremiumReport()"
+            >
               View Report
             </button>
           </div>
 
           <div class="col-md-2">
             <button
+              type="button"
               class="btn btn-success w-100 rounded-3"
               id="downloadReportBtn"
               onclick="downloadPremiumReport()"
+              disabled
             >
-              📥 Download PDF
+              📄 Download PDF
             </button>
           </div>
 
           <div class="col-md-2">
-            <span id="reportPremiumNote" class="premium-note text-danger"></span>
+            <button
+              type="button"
+              class="btn btn-outline-primary w-100 rounded-3 d-none"
+              id="toggleHistoryBtn"
+              onclick="toggleDownloadHistory()"
+            >
+              Download History
+            </button>
           </div>
         </div>
       </div>
@@ -166,6 +181,21 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="downloadHistorySection" class="card premium-section shadow-sm mb-4 d-none border-0 rounded-4">
+      <div class="card-header bg-light border-bottom">
+        <h5 class="mb-0">📥 Download History</h5>
+        <small class="text-muted">All your previously downloaded expense reports</small>
+      </div>
+      <div class="card-body">
+        <div id="downloadHistoryContainer" class="loading-spinner">
+          <div class="spinner-border spinner-border-sm" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          Loading download history...
         </div>
       </div>
     </div>
@@ -295,7 +325,14 @@
 
           <div class="col-md-2 d-none" id="yearlyFilterBox">
             <label class="form-label">Year</label>
-            <input type="number" id="yearFilter" class="form-control" placeholder="2026" min="2000" max="2100" />
+            <input
+              type="number"
+              id="yearFilter"
+              class="form-control"
+              placeholder="2026"
+              min="2000"
+              max="2100"
+            />
           </div>
 
           <div class="col-md-2">
@@ -314,13 +351,18 @@
           </div>
 
           <div class="col-md-1">
-            <button class="btn btn-secondary w-100 rounded-3" onclick="applyFilters()">
+            <button type="button" class="btn btn-secondary w-100 rounded-3" onclick="applyFilters()">
               Apply
             </button>
           </div>
 
           <div class="col-md-1">
-            <button class="btn btn-success w-100 rounded-3" onclick="exportExcel()">
+            <button
+              type="button"
+              class="btn btn-success w-100 rounded-3"
+              id="downloadExcelBtn"
+              onclick="exportExcel()"
+            >
               Excel
             </button>
           </div>
@@ -358,15 +400,18 @@
         </div>
 
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <button class="btn btn-outline-primary btn-sm rounded-3" onclick="prevPage()">Previous</button>
+          <button type="button" class="btn btn-outline-primary btn-sm rounded-3" onclick="prevPage()">
+            Previous
+          </button>
           <span id="pageInfo" class="fw-semibold">Page 1</span>
-          <button class="btn btn-outline-primary btn-sm rounded-3" onclick="nextPage()">Next</button>
+          <button type="button" class="btn btn-outline-primary btn-sm rounded-3" onclick="nextPage()">
+            Next
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Edit Transaction Modal -->
   <div class="modal fade" id="editTransactionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content border-0 shadow rounded-4">
@@ -428,7 +473,6 @@
     </div>
   </div>
 
-  <!-- Premium Purchase Modal -->
   <div class="modal fade" id="premiumPurchaseModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow rounded-4">
@@ -446,7 +490,12 @@
           <button type="button" class="btn btn-outline-secondary rounded-3" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button type="button" class="btn btn-warning rounded-3" id="proceedPremiumPaymentBtn" onclick="buyPremiumMembership()">
+          <button
+            type="button"
+            class="btn btn-warning rounded-3"
+            id="proceedPremiumPaymentBtn"
+            onclick="buyPremiumMembership()"
+          >
             Proceed to Pay
           </button>
         </div>
@@ -454,7 +503,6 @@
     </div>
   </div>
 
-  <!-- Cancel Payment Modal -->
   <div class="modal fade" id="cancelPaymentConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow rounded-4">
@@ -477,7 +525,6 @@
     </div>
   </div>
 
-  <!-- Delete Transaction Modal -->
   <div class="modal fade" id="deleteTransactionConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow rounded-4">
